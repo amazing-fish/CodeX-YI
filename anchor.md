@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
 - v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
 - v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
@@ -167,3 +168,22 @@
 - 风险与后续事项：
   - 数据 schema 变严格；缺失或畸形快照将明确保持 not-ready，而不是以空数据继续运行
   - 屯、贲、升的内容语义校正继续由 #10 独立跟踪，本 PR 不改变原始数据文本
+
+## 审计记录：v1.5.0
+
+- 变更版本：v1.5.0（security/bugfix）
+- 改动概述：封闭 localStorage 历史记录到列表/Modal 的持久化 DOM XSS 信任边界
+- 影响模块：存储管理、主题预初始化、history、divination、modal、theme、安全契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`、`index.html`、`theme-module.js`：以 localStorage 为持久化后端，显式迁移旧 sessionStorage，保持主题预初始化一致
+  - `apps/yi/js/modules/history-module.js`：引入 version 1 codec、字段/长度/时间/爻结构校验、canonical `hexagramId` 水合与非法记录清洗；持久化文本使用 `textContent`
+  - `apps/yi/js/modules/divination-module.js`、`modal-module.js`：写入稳定 timestamp；Modal 仅允许与数据服务匹配的 canonical 卦象保存，帮助等展示内容不可入历史
+  - `apps/yi/README.md`：记录失败关闭的数据快照、localStorage 迁移、version 1 历史模型与统一验证命令
+  - `apps/yi/tests/history-security-contract.mjs`、`validate-project.mjs`：覆盖恶意旧记录、非法引用、未知版本、安全 DOM sink 和 Modal 保存边界
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；恶意持久化字段未进入 innerHTML，非法/未知版本被清理，展示内容不可保存
+  - `node apps/yi/tests/validate-project.mjs`：通过；基础快照、语法及全部三类契约测试有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 未通过 schema 的历史记录将被拒绝并从规范化存储中移除；合法旧记录会迁移为 version 1
+  - 完整无障碍语义和应用 restart 生命周期继续由 #8、#6 独立跟踪

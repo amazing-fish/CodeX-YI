@@ -18,7 +18,31 @@
     <script>
         // 主题初始化（防止闪烁）
         (function() {
-            const savedTheme = sessionStorage.getItem('theme');
+            const THEME_KEY = 'yizhi_theme';
+
+            function readStorage(storage, key) {
+                try {
+                    return storage ? storage.getItem(key) : null;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            let savedTheme = null;
+            const rawTheme = readStorage(localStorage, THEME_KEY);
+
+            try {
+                savedTheme = rawTheme ? JSON.parse(rawTheme) : null;
+            } catch (error) {
+                savedTheme = rawTheme;
+            }
+
+            if (!savedTheme) {
+                savedTheme = readStorage(localStorage, 'theme')
+                    || readStorage(sessionStorage, THEME_KEY)
+                    || readStorage(sessionStorage, 'theme');
+            }
+
             if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
             }

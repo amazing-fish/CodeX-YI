@@ -585,9 +585,12 @@ const DivinationModule = (function() {
 
             if (!hexagram) return;
 
+            const now = new Date();
+
             const historyItem = {
                 id: YizhiApp.utils.generateId(),
-                date: YizhiApp.utils.formatDate(new Date()),
+                timestamp: now.getTime(),
+                date: YizhiApp.utils.formatDate(now),
                 hexagram: hexagram,
                 lines: YizhiApp.utils.deepClone(lines),
                 notes: '',
