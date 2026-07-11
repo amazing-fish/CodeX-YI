@@ -41,6 +41,8 @@ assert.match(validate, /node apps\/yi\/tests\/validate-project\.mjs/,
 assert.match(build, /needs:\s*validate/, 'build 必须依赖 validate');
 assert.match(build, /github\.ref == 'refs\/heads\/main'/,
   '只有 main 快照可以构建 Pages artifact');
+assert.match(build, /permissions:[\s\S]*contents:\s*read[\s\S]*pages:\s*read/,
+  'build job 必须以只读权限读取 Pages 配置');
 assert.doesNotMatch(build, /pages:\s*write|id-token:\s*write/,
   'build job 不得获得部署写权限');
 assert.match(deploy, /needs:\s*build/, 'deploy 必须依赖通过验证的 build');
