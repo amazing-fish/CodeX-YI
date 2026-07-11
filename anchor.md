@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
 - v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
@@ -149,3 +150,20 @@
 - 风险与后续事项：
   - 模态框只完成焦点循环和恢复；完整语义、对比度与键盘路径继续由 #8 跟踪
   - 移动端布局、生命周期重启、CI 门禁和内容数据校正不在本层 PR 范围
+
+## 审计记录：v1.4.0
+
+- 变更版本：v1.4.0（bugfix）
+- 改动概述：建立完整、失败关闭的六十四卦数据快照与两阶段关系索引
+- 影响模块：hexagram-data service、数据契约测试、项目校验
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：验证 64/8 数量、id、二进制、六爻与唯一性；先建立全量索引再计算三类关系；全部成功后一次性提交 ready 状态
+  - `apps/yi/tests/data-service-contract.mjs`：覆盖正常 JSON、合法 fallback、空/缺失/非法二进制/非六爻/非法 fallback 与 64×3 关系引用
+  - `apps/yi/tests/validate-project.mjs`：将数据服务契约纳入全量项目校验
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；JSON/fallback 成功路径、失败关闭和 64×3 关系引用均有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；基础快照、语法、静态交互和数据服务契约全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 数据 schema 变严格；缺失或畸形快照将明确保持 not-ready，而不是以空数据继续运行
+  - 屯、贲、升的内容语义校正继续由 #10 独立跟踪，本 PR 不改变原始数据文本

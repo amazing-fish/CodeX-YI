@@ -60,13 +60,20 @@ function validateJavaScriptSyntax() {
 }
 
 function validateContractTests() {
-  try {
-    execFileSync(process.execPath, ['apps/yi/tests/static-ui-contract.mjs'], {
-      cwd: repoRoot,
-      stdio: 'inherit'
-    });
-  } catch (error) {
-    failures.push(`Static UI contract failed with exit code ${error.status ?? 'unknown'}.`);
+  const contracts = [
+    'apps/yi/tests/static-ui-contract.mjs',
+    'apps/yi/tests/data-service-contract.mjs'
+  ];
+
+  for (const contract of contracts) {
+    try {
+      execFileSync(process.execPath, [contract], {
+        cwd: repoRoot,
+        stdio: 'inherit'
+      });
+    } catch (error) {
+      failures.push(`${contract} failed with exit code ${error.status ?? 'unknown'}.`);
+    }
   }
 }
 
