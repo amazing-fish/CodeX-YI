@@ -86,6 +86,15 @@ const files = execFileSync('git', [
 }).split('\0').filter(Boolean);
 assert.ok(files.some(file => file.startsWith('.trae/documents/') && file.endsWith('.md')),
   '非 ASCII 路径下的 Markdown 必须以真实未引号化路径进入扫描');
+
+const eolEntries = execFileSync('git', ['ls-files', '--eol', '-z'], {
+  cwd: repoRoot,
+  encoding: 'utf8'
+}).split('\0').filter(Boolean);
+for (const entry of eolEntries.filter(item => item.includes('attr/text eol=lf'))) {
+  assert.match(entry, /^i\/lf\s/, `LF 策略要求索引内容已归一化：${entry}`);
+}
+
 const textFiles = files.filter(file =>
   /\.(md|html|css|js|mjs|json|yml|yaml|svg)$/.test(file) ||
   ['.gitignore', '.gitattributes', '.gitmessage', '.githooks/commit-msg'].includes(file));

@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
 - v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
 - v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
@@ -361,3 +362,19 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 本地启用 hook 前需确保 `node` 位于 PATH；这与项目统一验证入口的运行要求一致
+
+## 审计记录：v1.7.3
+
+- 变更版本：v1.7.3（test/chore）
+- 改动概述：修复强制 LF 属性与历史 mixed EOL 索引 blob 冲突导致全新 checkout 立即变脏的问题
+- 影响模块：Git 换行策略、repository hygiene、核心静态源文件
+- 变更文件与补丁摘要：
+  - `apps/yi/css/styles.css`、`apps/yi/index.html`、`apps/yi/js/app.js`：仅将索引内 mixed EOL 归一化为 LF，不改变文本语义
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：要求所有匹配 `text eol=lf` 的已跟踪文件在 Git 索引中实际为 LF
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；LF 属性与索引 EOL 一致
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - 全新 detached worktree 的 `git status --short`：无输出
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 3 个源文件在 Git diff 中会显示整文件换行变更，已用忽略行尾差异的 diff 验证无语义改动
