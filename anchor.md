@@ -56,7 +56,7 @@
 
 ## 最近14个版本变更日志
 
-- v1.6.0（ci）：PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的非 PR 快照；默认只读、部署最小权限并固定 Actions SHA
+- v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
@@ -276,7 +276,7 @@
 ## 审计记录：v1.6.0
 
 - 变更版本：v1.6.0（ci）
-- 改动概述：建立 PR/main 项目验证门禁，并让 Pages 发布显式依赖通过验证的快照
+- 改动概述：建立覆盖堆叠 PR/main 的项目验证门禁，并让 Pages 发布显式依赖通过验证的 main 快照
 - 影响模块：GitHub Actions、CI workflow 契约、项目统一验证、部署文档
 - 变更文件与补丁摘要：
   - `.github/workflows/pages.yml`：新增 `validate` job；只有 main ref 在验证后 build/deploy，PR 或其他手动 ref 只验证；部署权限仅授予 deploy job

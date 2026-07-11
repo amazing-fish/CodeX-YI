@@ -14,8 +14,12 @@ function jobSection(name, nextName = null) {
   return workflow.slice(start, end >= 0 ? end : workflow.length);
 }
 
-assert.match(workflow, /pull_request:\s*\n\s+branches:\s*\[main\]/,
-  '面向 main 的 PR 必须触发验证');
+const pullRequestStart = workflow.indexOf('  pull_request:');
+const workflowDispatchStart = workflow.indexOf('  workflow_dispatch:', pullRequestStart);
+assert.ok(pullRequestStart >= 0 && workflowDispatchStart > pullRequestStart,
+  '所有 PR 都必须触发验证');
+assert.doesNotMatch(workflow.slice(pullRequestStart, workflowDispatchStart), /branches:/,
+  'pull_request 不得过滤 base 分支，堆叠 PR 也必须验证');
 assert.match(workflow, /push:\s*\n\s+branches:\s*\[main\]/,
   'main push 必须触发验证与部署');
 assert.match(workflow, /concurrency:[\s\S]*cancel-in-progress:\s*true/,
