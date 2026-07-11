@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.4（test/chore）：commit-msg hook 忽略注释化模板提示，拒绝“英文内容 + 中文模板”的假阳性
 - v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
 - v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
 - v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
@@ -378,3 +379,20 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 3 个源文件在 Git diff 中会显示整文件换行变更，已用忽略行尾差异的 diff 验证无语义改动
+
+## 审计记录：v1.7.4
+
+- 变更版本：v1.7.4（test/chore）
+- 改动概述：防止中文提交模板的提示文本让纯英文实际内容绕过 commit-msg hook
+- 影响模块：commit-msg hook、提交模板、repository hygiene、PowerShell 启用说明
+- 变更文件与补丁摘要：
+  - `.gitmessage`：将所有指导文本改为 `#` 注释行，不再成为实际提交内容
+  - `.githooks/commit-msg`：检测 Han 字符前排除注释行
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：真实执行 hook 并覆盖“英文摘要 + 中文模板”拒绝路径
+  - `AGENTS.md`：记录 hook 忽略模板注释的边界
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；中文内容放行，纯英文与带模板的纯英文内容均拒绝
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 以 `#` 开头的行按 Git 默认提交注释处理，不参与中文校验

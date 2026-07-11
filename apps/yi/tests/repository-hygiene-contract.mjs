@@ -50,8 +50,10 @@ const hookFixtureDir = mkdtempSync(join(tmpdir(), 'codex-yi-hook-'));
 try {
   const chineseMessage = join(hookFixtureDir, 'chinese.txt');
   const englishMessage = join(hookFixtureDir, 'english.txt');
+  const templatedEnglishMessage = join(hookFixtureDir, 'templated-english.txt');
   writeFileSync(chineseMessage, '修复：验证中文提交\n', 'utf8');
   writeFileSync(englishMessage, 'fix: english only\n', 'utf8');
+  writeFileSync(templatedEnglishMessage, `fix: english only\n\n${template}`, 'utf8');
 
   let chineseAccepted = true;
   try {
@@ -68,6 +70,17 @@ try {
     englishRejected = error.status === 1;
   }
   assert.equal(englishRejected, true, 'commit-msg hook 必须拒绝不含中文的提交');
+
+  let templatedEnglishRejected = false;
+  try {
+    execFileSync(shellExecutable, [join(repoRoot, '.githooks', 'commit-msg'), templatedEnglishMessage], {
+      stdio: 'pipe'
+    });
+  } catch (error) {
+    templatedEnglishRejected = error.status === 1;
+  }
+  assert.equal(templatedEnglishRejected, true,
+    'commit-msg hook 必须忽略模板中文并拒绝纯英文实际内容');
 } finally {
   rmSync(hookFixtureDir, { recursive: true, force: true });
 }
