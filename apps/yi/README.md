@@ -19,6 +19,22 @@
 3. 如需扩展功能，请在 `js/modules/` 目录内新增对应模块文件，并在 `index.html` 中补充 `<script>` 引用，遵循现有命名规范。
 4. 卦象或八卦数据更新可直接编辑 `data/hexagrams.json` 与 `data/bagua.json`，如有需要请同步生成对应的 `data/*.js` 回退文件。
 
+## 数据与本地存储
+
+- 数据服务只有在 64 个卦象和 8 个八卦全部通过结构校验后才会进入 ready 状态；网络加载失败时，预加载 `data/*.js` 也必须通过同一校验。
+- 主题和历史记录使用带 `yizhi_` 前缀的 localStorage；旧 sessionStorage 值会在首次读取时迁移。
+- 历史记录持久化为 version 1 引用模型，只保存 canonical `hexagramId` 和必要的占卜字段。非法引用、畸形字段或未知版本会被拒绝，持久化文本不会作为 HTML 渲染。
+
+## 验证
+
+在仓库根目录运行：
+
+```powershell
+node apps/yi/tests/validate-project.mjs
+```
+
+该命令检查许可证、数据快照与 fallback 一致性、JavaScript 语法，并执行静态交互、数据服务和历史安全契约。
+
 ## 浏览器支持
 站点依赖浏览器原生 `fetch` 与 ES2020 语法，建议使用现代 Chromium、Firefox 或 Safari 浏览器访问。
 

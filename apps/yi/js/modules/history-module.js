@@ -15,6 +15,9 @@ const HistoryModule = (function() {
     let currentFilter = 'all';
     let searchQuery = '';
     const STORAGE_KEY = 'divination_history';
+    const HISTORY_VERSION = 1;
+    const MAX_RECORDS = 200;
+    const MAX_NOTES_LENGTH = 500;
 
     // 初始化
     function init() {
@@ -24,6 +27,11 @@ const HistoryModule = (function() {
             initExportClear();
             updateHistoryDisplay();
             updateStats();
+
+            YizhiApp.events.on('hexagram-data:ready', () => {
+                updateHistoryDisplay();
+                updateStats();
+            });
         } catch (error) {
             YizhiApp.errors.handle(error, 'History Module Init');
         }
@@ -73,25 +81,129 @@ const HistoryModule = (function() {
     // 添加历史记录
     function addRecord(record) {
         try {
-            let history = getHistoryRecords();
-            history.unshift(record);
-
-            // 限制历史记录数量
-            if (history.length > 200) {
-                history = history.slice(0, 200);
+            const normalizedRecord = normalizeRecord(record, { allowGeneratedTimestamp: true });
+            if (!normalizedRecord) {
+                throw new Error('History record does not match the canonical schema.');
             }
 
-            YizhiApp.storage.setItem(STORAGE_KEY, history);
+            let history = getHistoryRecords();
+            history.unshift(normalizedRecord);
+
+            // 限制历史记录数量
+            if (history.length > MAX_RECORDS) {
+                history = history.slice(0, MAX_RECORDS);
+            }
+
+            persistRecords(history);
             updateHistoryDisplay();
             updateStats();
+            return true;
         } catch (error) {
             YizhiApp.errors.handle(error, 'Add History Record');
+            return false;
         }
     }
 
     // 获取历史记录
     function getHistoryRecords() {
-        return YizhiApp.storage.getItem(STORAGE_KEY, []);
+        const dataService = YizhiApp.getModule('hexagramData');
+        if (!dataService?.isInitialized) return [];
+
+        const storedRecords = YizhiApp.storage.getItem(STORAGE_KEY, []);
+        if (!Array.isArray(storedRecords)) {
+            YizhiApp.storage.setItem(STORAGE_KEY, []);
+            return [];
+        }
+
+        const records = storedRecords
+            .map(record => normalizeRecord(record))
+            .filter(Boolean)
+            .slice(0, MAX_RECORDS);
+        const encodedRecords = records.map(encodeRecord);
+
+        if (JSON.stringify(storedRecords) !== JSON.stringify(encodedRecords)) {
+            YizhiApp.storage.setItem(STORAGE_KEY, encodedRecords);
+        }
+
+        return records;
+    }
+
+    function normalizeRecord(record, { allowGeneratedTimestamp = false } = {}) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+        if (record.version !== undefined && record.version !== HISTORY_VERSION) return null;
+
+        const id = normalizeText(record.id, 100);
+        const hexagramId = Number(record.hexagramId ?? record.hexagram?.id);
+        const canonicalHexagram = YizhiApp.getModule('hexagramData')?.getHexagramById(hexagramId);
+        if (!id || !Number.isInteger(hexagramId) || !canonicalHexagram) return null;
+
+        let timestamp = Number(record.timestamp);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) {
+            timestamp = parseLegacyDate(record.date);
+        }
+        if ((!Number.isFinite(timestamp) || timestamp <= 0) && allowGeneratedTimestamp) {
+            timestamp = Date.now();
+        }
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+
+        const lines = normalizeLines(record.lines);
+        if (lines === null) return null;
+
+        return {
+            id,
+            timestamp,
+            date: YizhiApp.utils.formatDate(new Date(timestamp)),
+            hexagram: canonicalHexagram,
+            lines,
+            notes: normalizeText(record.notes, MAX_NOTES_LENGTH),
+            source: ['divination', 'modal'].includes(record.source) ? record.source : 'divination',
+            changingLinesCount: lines.filter(line => line.changing).length
+        };
+    }
+
+    function encodeRecord(record) {
+        return {
+            version: HISTORY_VERSION,
+            id: record.id,
+            timestamp: record.timestamp,
+            hexagramId: record.hexagram.id,
+            lines: record.lines,
+            notes: record.notes,
+            source: record.source,
+            changingLinesCount: record.changingLinesCount
+        };
+    }
+
+    function persistRecords(records) {
+        YizhiApp.storage.setItem(STORAGE_KEY, records.map(encodeRecord));
+    }
+
+    function normalizeText(value, maxLength) {
+        if (typeof value !== 'string') return '';
+        return value.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, maxLength);
+    }
+
+    function parseLegacyDate(value) {
+        if (typeof value !== 'string' || value.trim() === '') return 0;
+        const timestamp = Date.parse(value.replace(' ', 'T'));
+        return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+
+    function normalizeLines(lines) {
+        if (!Array.isArray(lines) || lines.length > 6) return null;
+        const normalized = [];
+
+        for (const line of lines) {
+            if (!line || !['yin', 'yang'].includes(line.type) || typeof line.changing !== 'boolean') {
+                return null;
+            }
+            normalized.push({
+                type: line.type,
+                changing: line.changing,
+                name: normalizeText(line.name, 20)
+            });
+        }
+        return normalized;
     }
 
     // 获取筛选后的历史记录
@@ -108,7 +220,7 @@ const HistoryModule = (function() {
                 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
                 allRecords = allRecords.filter(record => {
-                    const recordDate = new Date(record.date);
+                    const recordDate = new Date(record.timestamp);
 
                     switch (currentFilter) {
                         case 'today':
@@ -145,7 +257,7 @@ const HistoryModule = (function() {
         try {
             let history = getHistoryRecords();
             history = history.filter(record => record.id !== id);
-            YizhiApp.storage.setItem(STORAGE_KEY, history);
+            persistRecords(history);
             updateHistoryDisplay();
             updateStats();
 
@@ -205,14 +317,13 @@ const HistoryModule = (function() {
 
         historyItem.innerHTML = `
             <div class="history-item-content">
-                <div class="history-date">${record.date}</div>
+                <div class="history-date"></div>
                 <div class="history-item-header">
-                    <div class="history-hexagram-name">${record.hexagram.name}</div>
-                    <div class="history-unicode">${record.hexagram.unicode || ''}</div>
+                    <div class="history-hexagram-name"></div>
+                    <div class="history-unicode"></div>
                 </div>
-                <div class="history-text">${record.hexagram.explanation}</div>
+                <div class="history-text"></div>
                 ${changingText}
-                ${record.notes ? `<div class="history-notes">${record.notes}</div>` : ''}
                 <div class="history-actions">
                     <button class="history-action view-action tooltip" data-tooltip="查看详情" aria-label="查看详情">
                         <svg class="icon icon-sm" viewBox="0 0 24 24">
@@ -227,6 +338,18 @@ const HistoryModule = (function() {
                 </div>
             </div>
         `;
+
+        historyItem.querySelector('.history-date').textContent = record.date;
+        historyItem.querySelector('.history-hexagram-name').textContent = record.hexagram.name;
+        historyItem.querySelector('.history-unicode').textContent = record.hexagram.unicode || '';
+        historyItem.querySelector('.history-text').textContent = record.hexagram.explanation;
+
+        if (record.notes) {
+            const notes = document.createElement('div');
+            notes.className = 'history-notes';
+            notes.textContent = record.notes;
+            historyItem.querySelector('.history-actions').before(notes);
+        }
 
         // 绑定事件
         const viewBtn = historyItem.querySelector('.view-action');
@@ -266,7 +389,7 @@ const HistoryModule = (function() {
             weekStart.setDate(now.getDate() - now.getDay());
 
             const weekRecords = allRecords.filter(record => {
-                return new Date(record.date) >= weekStart;
+                return new Date(record.timestamp) >= weekStart;
             });
 
             const changingRecords = allRecords.filter(record => {

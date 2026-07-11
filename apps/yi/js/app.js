@@ -17,6 +17,7 @@ const APP_CONFIG = {
         logThreshold: 100 // ms
     },
     storage: {
+        backend: 'localStorage',
         prefix: 'yizhi_',
         useMemoryFallback: true
     },
@@ -165,9 +166,9 @@ const StorageManager = {
         const fullKey = APP_CONFIG.storage.prefix + key;
 
         try {
-            // 尝试使用 sessionStorage（如果可用）
-            if (typeof sessionStorage !== 'undefined') {
-                sessionStorage.setItem(fullKey, JSON.stringify(value));
+            // 优先使用 localStorage，保证历史记录和主题设置跨会话保留。
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(fullKey, JSON.stringify(value));
             } else {
                 // 回退到内存存储
                 this._memoryStorage.set(fullKey, value);
@@ -187,17 +188,43 @@ const StorageManager = {
         const fullKey = APP_CONFIG.storage.prefix + key;
 
         try {
-            // 尝试从 sessionStorage 读取
-            if (typeof sessionStorage !== 'undefined') {
-                const item = sessionStorage.getItem(fullKey);
-                return item ? JSON.parse(item) : defaultValue;
-            } else {
-                // 从内存存储读取
-                return this._memoryStorage.get(fullKey) || defaultValue;
+            if (typeof localStorage !== 'undefined') {
+                let item = null;
+                try {
+                    item = localStorage.getItem(fullKey);
+                } catch (localReadError) {
+                    console.warn('Local storage read failed; trying legacy storage:', localReadError);
+                }
+                if (item) {
+                    return JSON.parse(item);
+                }
             }
+
+            // 兼容早期 sessionStorage 数据，读取后迁移到 localStorage。
+            if (typeof sessionStorage !== 'undefined') {
+                const legacyItem = sessionStorage.getItem(fullKey);
+                if (legacyItem) {
+                    const value = JSON.parse(legacyItem);
+                    if (typeof localStorage !== 'undefined') {
+                        try {
+                            localStorage.setItem(fullKey, JSON.stringify(value));
+                            sessionStorage.removeItem(fullKey);
+                        } catch (migrationError) {
+                            console.warn('Storage migration failed; using legacy value:', migrationError);
+                        }
+                    }
+                    return value;
+                }
+            }
+
+            return this._memoryStorage.has(fullKey)
+                ? this._memoryStorage.get(fullKey)
+                : defaultValue;
         } catch (error) {
             console.warn('Storage read failed:', error);
-            return this._memoryStorage.get(fullKey) || defaultValue;
+            return this._memoryStorage.has(fullKey)
+                ? this._memoryStorage.get(fullKey)
+                : defaultValue;
         }
     },
 
@@ -209,6 +236,9 @@ const StorageManager = {
         const fullKey = APP_CONFIG.storage.prefix + key;
 
         try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.removeItem(fullKey);
+            }
             if (typeof sessionStorage !== 'undefined') {
                 sessionStorage.removeItem(fullKey);
             }
@@ -224,14 +254,20 @@ const StorageManager = {
      */
     clear() {
         try {
-            if (typeof sessionStorage !== 'undefined') {
-                // 只清除应用相关的项目
-                const keys = Object.keys(sessionStorage);
+            const clearStorage = (storage) => {
+                const keys = Object.keys(storage);
                 keys.forEach(key => {
                     if (key.startsWith(APP_CONFIG.storage.prefix)) {
-                        sessionStorage.removeItem(key);
+                        storage.removeItem(key);
                     }
                 });
+            };
+
+            if (typeof localStorage !== 'undefined') {
+                clearStorage(localStorage);
+            }
+            if (typeof sessionStorage !== 'undefined') {
+                clearStorage(sessionStorage);
             }
             this._memoryStorage.clear();
         } catch (error) {

@@ -56,6 +56,12 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
+- v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
+- v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
+- v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
+- v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
+- v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
 - v1.3.1（bugfix）：保留首次打开 Modal 的外部焦点来源，避免相关卦象内导航覆盖 opener；补充焦点恢复行为回归测试
 - v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
@@ -165,3 +171,103 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 只改变已打开 Modal 内导航时的焦点来源保留，不改变首次打开、Tab 焦点循环或 Escape 关闭行为
+
+## 审计记录：v1.4.0
+
+- 变更版本：v1.4.0（bugfix）
+- 改动概述：建立完整、失败关闭的六十四卦数据快照与两阶段关系索引
+- 影响模块：hexagram-data service、数据契约测试、项目校验
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：验证 64/8 数量、id、二进制、六爻与唯一性；先建立全量索引再计算三类关系；全部成功后一次性提交 ready 状态
+  - `apps/yi/tests/data-service-contract.mjs`：覆盖正常 JSON、合法 fallback、空/缺失/非法二进制/非六爻/非法 fallback 与 64×3 关系引用
+  - `apps/yi/tests/validate-project.mjs`：将数据服务契约纳入全量项目校验
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；JSON/fallback 成功路径、失败关闭和 64×3 关系引用均有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；基础快照、语法、静态交互和数据服务契约全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 数据 schema 变严格；缺失或畸形快照将明确保持 not-ready，而不是以空数据继续运行
+  - 屯、贲、升的内容语义校正继续由 #10 独立跟踪，本 PR 不改变原始数据文本
+
+## 审计记录：v1.5.0
+
+- 变更版本：v1.5.0（security/bugfix）
+- 改动概述：封闭 localStorage 历史记录到列表/Modal 的持久化 DOM XSS 信任边界
+- 影响模块：存储管理、主题预初始化、history、divination、modal、theme、安全契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`、`index.html`、`theme-module.js`：以 localStorage 为持久化后端，显式迁移旧 sessionStorage，保持主题预初始化一致
+  - `apps/yi/js/modules/history-module.js`：引入 version 1 codec、字段/长度/时间/爻结构校验、canonical `hexagramId` 水合与非法记录清洗；持久化文本使用 `textContent`
+  - `apps/yi/js/modules/divination-module.js`、`modal-module.js`：写入稳定 timestamp；Modal 仅允许与数据服务匹配的 canonical 卦象保存，帮助等展示内容不可入历史
+  - `apps/yi/README.md`：记录失败关闭的数据快照、localStorage 迁移、version 1 历史模型与统一验证命令
+  - `apps/yi/tests/history-security-contract.mjs`、`validate-project.mjs`：覆盖恶意旧记录、非法引用、未知版本、安全 DOM sink 和 Modal 保存边界
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；恶意持久化字段未进入 innerHTML，非法/未知版本被清理，展示内容不可保存
+  - `node apps/yi/tests/validate-project.mjs`：通过；基础快照、语法及全部三类契约测试有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 未通过 schema 的历史记录将被拒绝并从规范化存储中移除；合法旧记录会迁移为 version 1
+  - 完整无障碍语义和应用 restart 生命周期继续由 #8、#6 独立跟踪
+
+## 审计记录：v1.5.1
+
+- 变更版本：v1.5.1（bugfix）
+- 改动概述：补齐八卦固定名称键约束，保证 ready 快照可被既有 UI 与分析器按名称查询
+- 影响模块：hexagram-data service、数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：要求八个固定卦名全部存在，再校验各自字段与二进制唯一性
+  - `apps/yi/tests/data-service-contract.mjs`：加入“保留 8 个唯一二进制但将乾重命名为天”的失败关闭回归用例
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；重命名固定卦名的 8 项 payload 保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 固定名称是现有下拉框、常用组合和 `getBagua()` API 的公开契约；拒绝别名键属于预期的失败关闭行为
+
+## 审计记录：v1.5.2
+
+- 变更版本：v1.5.2（bugfix）
+- 改动概述：隔离 legacy storage 的迁移写入失败，保证可读旧数据不会因 localStorage 限制而被隐藏
+- 影响模块：StorageManager、历史安全契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`：将 localStorage 写入和 sessionStorage 删除置于内层 best-effort try/catch；无论迁移是否成功都返回已解析旧值
+  - `apps/yi/tests/history-security-contract.mjs`：从真实 app.js 提取 StorageManager，覆盖 localStorage.setItem 抛错时返回 legacy 值且不删除旧记录
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；迁移写入失败时返回 legacy 值且未删除 sessionStorage
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 迁移失败会保留 sessionStorage，并在后续加载继续尝试；不会把失败误当成数据缺失
+
+## 审计记录：v1.5.3
+
+- 变更版本：v1.5.3（bugfix）
+- 改动概述：把八卦固定键约束深化为名称到 canonical 三位二进制的完整映射约束
+- 影响模块：hexagram-data service、数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：定义并校验 `乾=111`、`坤=000`、`震=001`、`巽=110`、`坎=010`、`离=101`、`艮=100`、`兑=011`
+  - `apps/yi/tests/data-service-contract.mjs`：交换乾/坤编码但保持格式与全局唯一性，验证快照仍失败关闭
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；交换乾/坤编码的 payload 保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - canonical 映射与现有数据、上下卦下拉框和分析器契约一致；别名或交换编码不再被接受
+
+## 审计记录：v1.5.4
+
+- 变更版本：v1.5.4（bugfix）
+- 改动概述：补齐 localStorage 读取异常回退与八卦用户可见字段完整性边界
+- 影响模块：StorageManager、hexagram-data service、历史与数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`：单独捕获 localStorage.getItem 访问异常；不吞掉可继续读取的 legacy sessionStorage
+  - `apps/yi/js/services/hexagram-data-service-module.js`：要求 `symbol/nature/attribute/direction/animal/element/family` 全部为非空字符串
+  - `apps/yi/tests/history-security-contract.mjs`：覆盖 localStorage 读取抛 SecurityError 后仍读取 legacy 值
+  - `apps/yi/tests/data-service-contract.mjs`：覆盖缺失 `nature` 时快照保持 not-ready
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；localStorage 读取异常后仍返回 legacy 值
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；缺失 `nature` 的八卦快照保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - localStorage 中存在但 JSON 畸形的当前值仍严格失败，不会降级读取 legacy 格式
+  - 缺失展示字段的八卦快照会失败关闭，避免 ready 后向 UI 泄漏 `undefined`

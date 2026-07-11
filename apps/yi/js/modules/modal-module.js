@@ -12,6 +12,7 @@ const ModalModule = (function() {
     const modalContent = document.getElementById('modalContent');
 
     let currentHexagram = null;
+    let currentContent = null;
     let isVisible = false;
     let lastFocusedElement = null;
 
@@ -71,7 +72,11 @@ const ModalModule = (function() {
         }
 
         try {
-            currentHexagram = hexagram;
+            currentContent = hexagram;
+            currentHexagram = resolvePersistableHexagram(hexagram);
+            if (modalSaveBtn) {
+                modalSaveBtn.disabled = !currentHexagram;
+            }
             if (!isVisible && document.activeElement instanceof HTMLElement) {
                 lastFocusedElement = document.activeElement;
             }
@@ -113,6 +118,7 @@ const ModalModule = (function() {
             modal.style.display = 'none';
             isVisible = false;
             currentHexagram = null;
+            currentContent = null;
 
             // 恢复背景滚动
             document.body.style.overflow = '';
@@ -129,6 +135,14 @@ const ModalModule = (function() {
         } catch (error) {
             YizhiApp.errors.handle(error, 'Hide Modal');
         }
+    }
+
+    function resolvePersistableHexagram(content) {
+        const id = Number(content?.id);
+        if (!Number.isInteger(id) || typeof content?.binary !== 'string') return null;
+
+        const canonical = YizhiApp.getModule('hexagramData')?.getHexagramById(id);
+        return canonical?.binary === content.binary ? canonical : null;
     }
 
     function getFocusableElements() {
@@ -346,10 +360,13 @@ const ModalModule = (function() {
         if (!currentHexagram) return;
 
         try {
+            const now = new Date();
+
             // 创建历史记录项
             const historyItem = {
                 id: YizhiApp.utils.generateId(),
-                date: YizhiApp.utils.formatDate(new Date()),
+                timestamp: now.getTime(),
+                date: YizhiApp.utils.formatDate(now),
                 hexagram: currentHexagram,
                 lines: [], // 模态框中的卦象可能没有具体的爻线信息
                 notes: '通过查询保存',
@@ -366,15 +383,15 @@ const ModalModule = (function() {
 
     // 分享当前卦象
     function shareCurrentHexagram() {
-        if (!currentHexagram) return;
+        if (!currentContent) return;
 
         try {
-            const shareText = `${currentHexagram.name} - ${currentHexagram.explanation}\n\n${currentHexagram.overview || ''}`;
+            const shareText = `${currentContent.name} - ${currentContent.explanation}\n\n${currentContent.overview || ''}`;
 
             if (navigator.share) {
                 // 使用原生分享API
                 navigator.share({
-                    title: `易之 - ${currentHexagram.name}`,
+                    title: `易之 - ${currentContent.name}`,
                     text: shareText,
                     url: window.location.href
                 }).then(() => {
