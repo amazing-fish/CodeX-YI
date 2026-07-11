@@ -22,6 +22,8 @@
 ## 数据与本地存储
 
 - 数据服务只有在 64 个卦象和 8 个八卦全部通过结构校验后才会进入 ready 状态；网络加载失败时，预加载 `data/*.js` 也必须通过同一校验。
+- 六爻 `binary` 按页面从上到下记录：前 3 位是上卦，后 3 位是下卦；例如 `010001` 推导为坎(水)上震(雷)下，即水雷屯。
+- `overview` 使用上卦与下卦的 `nature` 组合，`detail` 的上下卦首句必须与编码一致；《周易·大象》中同一八卦可用其他物象（如坎为云、巽为木），经典意象参照[《周易/大象》](https://zh.wikisource.org/zh-hans/%E5%91%A8%E6%98%93/%E5%A4%A7%E8%B1%A1)。
 - 主题和历史记录使用带 `yizhi_` 前缀的 localStorage；旧 sessionStorage 值会在首次读取时迁移。
 - 历史记录持久化为 version 1 引用模型，只保存 canonical `hexagramId` 和必要的占卜字段。非法引用、畸形字段或未知版本会被拒绝，持久化文本不会作为 HTML 渲染。
 
@@ -33,7 +35,7 @@
 node apps/yi/tests/validate-project.mjs
 ```
 
-该命令检查许可证、数据快照与 fallback 一致性、JavaScript 语法，并执行静态交互、数据服务和历史安全契约。
+该命令检查许可证、数据快照与 fallback 一致性、JavaScript 语法，并执行静态交互、数据服务、六爻编码与内容语义、历史安全契约。
 
 ## 浏览器支持
 站点依赖浏览器原生 `fetch` 与 ES2020 语法，建议使用现代 Chromium、Firefox 或 Safari 浏览器访问。

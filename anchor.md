@@ -29,6 +29,7 @@
   - 错误处理：统一入口 `apps/yi/js/app.js:296-333`；模块初始化包装 `apps/yi/js/app.js:606-613`；全局错误与 Promise 拒绝监听 `apps/yi/js/app.js:587-593`、`958-965`
   - 配置加载：`apps/yi/js/app.js:10-30`（名称/版本/调试/性能阈值/存储前缀/动画时长）
   - 数据 IO 边界：卦象数据加载与回退 `apps/yi/js/services/hexagram-data-service-module.js:39-69`；八卦数据加载与回退 `78-113`
+  - 六爻编码约定：`binary` 从上到下记录，`slice(0, 3)` 为上卦、`slice(3)` 为下卦；全量内容契约位于 `apps/yi/tests/hexagram-content-contract.mjs`
   - 事件驱动：模块注册事件 `apps/yi/js/app.js:484-486`；数据就绪事件 `apps/yi/js/services/hexagram-data-service-module.js:27-28`；导航与标签页事件 `apps/yi/js/app.js:682-685`、`720-722`
   - 性能监控：计时与阈值告警 `apps/yi/js/app.js:244-293`；注册/初始化打点 `apps/yi/js/app.js:475-479`、`609-612`
   - 存储回退：`sessionStorage` 不可用时转内存 Map `apps/yi/js/app.js:167-178`、`195-201`
@@ -56,6 +57,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
@@ -271,3 +273,21 @@
 - 风险与后续事项：
   - localStorage 中存在但 JSON 畸形的当前值仍严格失败，不会降级读取 legacy 格式
   - 缺失展示字段的八卦快照会失败关闭，避免 ready 后向 UI 泄漏 `undefined`
+
+## 审计记录：v1.5.5
+
+- 变更版本：v1.5.5（data/bugfix）
+- 改动概述：校正屯、贲、升的卦象组成叙述，并建立从六爻编码推导上下卦的全量内容契约
+- 影响模块：卦象 JSON/JS fallback、数据文档、项目统一验证
+- 变更文件与补丁摘要：
+  - `apps/yi/data/hexagrams.json`、`hexagrams.js`：屯校正为坎(水)上震(雷)下，贲意象校正为“山下有火”，升意象校正为“地中生木”
+  - `apps/yi/tests/hexagram-content-contract.mjs`：校验 JSON/JS 一致，并对 64 卦逐一推导上下卦、overview 和 detail 组成首句
+  - `apps/yi/tests/validate-project.mjs`：将卦象内容契约纳入统一验证
+  - `apps/yi/README.md`：记录六位编码位序、上下卦推导和经典物象边界
+- 验证步骤与结果：
+  - `node apps/yi/tests/hexagram-content-contract.mjs`：通过；64 卦结构叙述、三个定点意象和 fallback 一致性有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、内容语义和历史安全契约全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 契约锁定数据服务的当前位序语义；若未来改变编码方向，必须同步迁移服务、64 卦数据与文档
+  - 经典意象依据《周易·大象》；不扩展为对所有现代解读文本的学术校订
