@@ -56,6 +56,8 @@
 
 ## 最近14个版本变更日志
 
+- v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
+- v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
@@ -271,3 +273,37 @@
 - 风险与后续事项：
   - localStorage 中存在但 JSON 畸形的当前值仍严格失败，不会降级读取 legacy 格式
   - 缺失展示字段的八卦快照会失败关闭，避免 ready 后向 UI 泄漏 `undefined`
+
+## 审计记录：v1.6.0
+
+- 变更版本：v1.6.0（ci）
+- 改动概述：建立覆盖堆叠 PR/main 的项目验证门禁，并让 Pages 发布显式依赖通过验证的 main 快照
+- 影响模块：GitHub Actions、CI workflow 契约、项目统一验证、部署文档
+- 变更文件与补丁摘要：
+  - `.github/workflows/pages.yml`：新增 `validate` job；只有 main ref 在验证后 build/deploy，PR 或其他手动 ref 只验证；部署权限仅授予 deploy job
+  - `apps/yi/tests/ci-workflow-contract.mjs`：静态验证触发器、依赖、最小权限、PR 部署隔离、concurrency 与 40 位 Action SHA
+  - `apps/yi/tests/validate-project.mjs`：将 CI workflow 契约纳入统一校验入口
+  - `apps/yi/README.md`：记录本地等价命令、失败诊断、部署边界与分支保护启用时机
+- 验证步骤与结果：
+  - `node apps/yi/tests/ci-workflow-contract.mjs`：通过；workflow 结构符合门禁契约
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全、CI workflow 与基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - required status check 必须在 workflow 合入 main 并首次产生 `validate` 后启用，避免在检查尚不存在时锁死 main
+  - Actions 升级必须更新精确 SHA 与版本注释，不能退回浮动 tag
+
+## 审计记录：v1.6.1
+
+- 变更版本：v1.6.1（ci/bugfix）
+- 改动概述：补齐 configure-pages 在非公开仓库读取 Pages 配置所需的只读权限
+- 影响模块：Pages workflow、CI workflow 契约、部署文档
+- 变更文件与补丁摘要：
+  - `.github/workflows/pages.yml`：build job 显式授予 `contents: read` 与 `pages: read`
+  - `apps/yi/tests/ci-workflow-contract.mjs`：要求 build 可读取 Pages 配置，同时禁止 `pages: write` 和 `id-token: write`
+  - `apps/yi/README.md`：区分 workflow 默认只读、build Pages 只读与 deploy 写权限
+- 验证步骤与结果：
+  - `node apps/yi/tests/ci-workflow-contract.mjs`：通过；build 仅具有 `contents: read/pages: read`，部署写权限保持隔离
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全、CI workflow 与基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 新增权限仅为读取 Pages 配置，不扩大 artifact 上传或部署写权限
