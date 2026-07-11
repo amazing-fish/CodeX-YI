@@ -36,10 +36,20 @@ const template = readFileSync(join(repoRoot, '.gitmessage'), 'utf8');
 assert.match(hook, /提交信息必须包含中文/);
 assert.match(template, /类型：简短中文说明/);
 
-const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+const files = execFileSync('git', [
+  '-c',
+  'core.quotePath=false',
+  'ls-files',
+  '-z',
+  '--cached',
+  '--others',
+  '--exclude-standard'
+], {
   cwd: repoRoot,
   encoding: 'utf8'
-}).split(/\r?\n/).filter(Boolean);
+}).split('\0').filter(Boolean);
+assert.ok(files.some(file => file.startsWith('.trae/documents/') && file.endsWith('.md')),
+  '非 ASCII 路径下的 Markdown 必须以真实未引号化路径进入扫描');
 const textFiles = files.filter(file =>
   /\.(md|html|css|js|mjs|json|yml|yaml|svg)$/.test(file) ||
   ['.gitignore', '.gitattributes', '.gitmessage', '.githooks/commit-msg'].includes(file));

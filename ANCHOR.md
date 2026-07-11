@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
@@ -328,3 +329,18 @@
 - 风险与后续事项：
   - `.gitattributes` 约束后续 checkout/commit 的规范行尾，本 PR 不批量重写无关文件以避免大范围噪声
   - 本地 hook 需开发者显式运行 `git config core.hooksPath .githooks`，CI 不依赖该 hook
+
+## 审计记录：v1.7.1
+
+- 变更版本：v1.7.1（test/docs）
+- 改动概述：修复 Git C 风格路径引号导致非 ASCII Markdown 漏扫的 hygiene 假阳性
+- 影响模块：repository hygiene、`.trae/documents` 历史计划文档
+- 变更文件与补丁摘要：
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：使用 `git -c core.quotePath=false ls-files -z` 并按 NUL 分割真实路径
+  - `.trae/documents/*.md`：统一 `AGENTS.md/ANCHOR.md` 内容引用并修复单一 EOF 换行
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；非 ASCII 路径进入真实扫描且全部文本契约有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 保留历史文档文件名不变，只修正内容引用与格式，避免无必要的路径迁移
