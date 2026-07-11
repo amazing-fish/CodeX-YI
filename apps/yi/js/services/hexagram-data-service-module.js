@@ -417,4 +417,3 @@ const HexagramDataService = (function() {
         get isInitialized() { return isInitialized; }
     };
 })();
-

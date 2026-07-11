@@ -109,11 +109,11 @@ const KnowledgeModule = (function() {
                     <h4>卦象结构</h4>
                     <p>二进制：${data.binary}</p>
                     <p>符号：${data.symbol}</p>
-                    
+
                     <h4>象征意义</h4>
                     <p>本性：${data.nature}</p>
                     <p>特质：${data.attribute}</p>
-                    
+
                     <h4>对应关系</h4>
                     <p>方位：${data.direction}</p>
                     <p>五行：${data.element}</p>

@@ -137,12 +137,12 @@ const HelpModule = (function() {
                             为您提供准确、便捷的占卜体验。以下是详细的使用指南。
                         </p>
                     </div>
-                    
+
                     <div class="help-sections">
                         ${sectionsHTML}
                         ${shortcutsHTML}
                     </div>
-                    
+
                     <div class="help-footer">
                         <p class="help-version">版本：${YizhiApp.config.version}</p>
                         <p class="help-contact">

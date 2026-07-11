@@ -22,7 +22,7 @@
 - 新增：`apps/yi/tests/validate-project.mjs`
 - 新增：`docs/plans/2026-07-11-issue-pr-remediation-design.md`
 - 新增：`docs/plans/2026-07-11-issue-pr-remediation-plan.md`
-- 修改：`anchor.md`
+- 修改：`ANCHOR.md`
 
 步骤：
 
@@ -47,7 +47,7 @@
 - `apps/yi/js/modules/modal-module.js`
 - `apps/yi/js/modules/search-module.js`
 - `apps/yi/tests/validate-project.mjs`
-- `anchor.md`
+- `ANCHOR.md`
 
 步骤：
 
@@ -58,7 +58,7 @@
 5. 分析器仅在数据服务完整就绪后工作；移除重复全局错误监听。
 6. 保留模态框焦点恢复等不改变数据契约的安全修复。
 7. 运行定向测试、全量项目校验、语法检查和 `git diff --check`。
-8. 更新 `anchor.md`，中文提交、推送并创建堆叠 PR；关联对应 Issue。
+8. 更新 `ANCHOR.md`，中文提交、推送并创建堆叠 PR；关联对应 Issue。
 
 ## Task 4：完成 PR 3——数据加载与关系索引契约
 
@@ -69,7 +69,7 @@
 - `apps/yi/js/services/hexagram-data-service-module.js`
 - `apps/yi/tests/data-service-contract.mjs`
 - `apps/yi/tests/validate-project.mjs`
-- `anchor.md`
+- `ANCHOR.md`
 
 步骤：
 
@@ -77,7 +77,7 @@
 2. 将载入分成“解析/校验快照”“建立全量索引”“计算关系”“提交 ready 状态”四步。
 3. JSON 与 JS fallback 共用同一校验入口；失败时保留 not-ready 状态并发出明确错误。
 4. 运行数据契约测试、全量校验、语法检查和 `git diff --check`。
-5. 更新 `anchor.md`，中文提交、推送并创建堆叠 PR；关闭数据快照 Issue。
+5. 更新 `ANCHOR.md`，中文提交、推送并创建堆叠 PR；关闭数据快照 Issue。
 
 ## Task 5：完成 PR 4——历史记录安全边界
 
@@ -91,7 +91,7 @@
 - `apps/yi/js/modules/theme-module.js`
 - `apps/yi/tests/history-security-contract.mjs`
 - `apps/yi/tests/validate-project.mjs`
-- `anchor.md`
+- `ANCHOR.md`
 
 步骤：
 
@@ -100,7 +100,7 @@
 3. 历史列表用 `createElement` / `textContent` 构建；不可信字段不得进入 `innerHTML`。
 4. Modal 区分“可保存的合法卦象详情”和“仅展示内容”，避免帮助或八卦数据污染历史。
 5. 运行安全契约测试、全量校验、语法检查和 `git diff --check`。
-6. 更新 `anchor.md`，中文提交、推送并创建堆叠 PR；关闭安全 Issue。
+6. 更新 `ANCHOR.md`，中文提交、推送并创建堆叠 PR；关闭安全 Issue。
 
 ## Task 6：远端复核与交付
 
