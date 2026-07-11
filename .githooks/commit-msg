@@ -2,7 +2,7 @@
 
 commit_msg_file="$1"
 
-if ! grep -q '[一-龥]' "$commit_msg_file"; then
+if ! node -e 'const fs = require("fs"); const message = fs.readFileSync(process.argv[1], "utf8"); process.exit(/\p{Script=Han}/u.test(message) ? 0 : 1);' "$commit_msg_file"; then
   echo "提交信息必须包含中文。"
   exit 1
 fi

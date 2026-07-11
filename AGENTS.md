@@ -131,7 +131,7 @@ node apps/yi/tests/validate-project.mjs
 git diff --check
 ```
 
-- `core.hooksPath` 启用中文提交信息校验；该 hook 只影响显式启用它的本地仓库，不影响 GitHub Actions。
+- `core.hooksPath` 启用基于 Node Unicode 检测的中文提交信息校验；该 hook 只影响显式启用它的本地仓库，不影响 GitHub Actions。
 - `commit.template` 启用中文提交模板，可按需取消本地配置。
 - 提交前运行统一校验与空白检查，结果同步记录到 `ANCHOR.md`。
 

@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
 - v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
@@ -344,3 +345,19 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 保留历史文档文件名不变，只修正内容引用与格式，避免无必要的路径迁移
+
+## 审计记录：v1.7.2
+
+- 变更版本：v1.7.2（test/chore）
+- 改动概述：用 Unicode 感知且跨 locale 的实现替代不可移植的 POSIX grep 中文范围
+- 影响模块：commit-msg hook、repository hygiene、PowerShell 初始化说明
+- 变更文件与补丁摘要：
+  - `.githooks/commit-msg`：使用 Node `\p{Script=Han}` 检测 UTF-8 中文字符
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：在 Windows 使用 Git 自带 `sh.exe`、在 Unix 使用 `sh` 真实执行 hook，验证中文提交退出 0、纯英文退出 1
+  - `AGENTS.md`：明确本地 hook 依赖 Node Unicode 检测
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；真实 Git shell 下中文提交退出 0、纯英文退出 1
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 本地启用 hook 前需确保 `node` 位于 PATH；这与项目统一验证入口的运行要求一致

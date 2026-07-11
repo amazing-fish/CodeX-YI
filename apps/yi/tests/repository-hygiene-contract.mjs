@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +36,41 @@ const hook = readFileSync(join(repoRoot, '.githooks', 'commit-msg'), 'utf8');
 const template = readFileSync(join(repoRoot, '.gitmessage'), 'utf8');
 assert.match(hook, /提交信息必须包含中文/);
 assert.match(template, /类型：简短中文说明/);
+
+let shellExecutable = 'sh';
+if (process.platform === 'win32') {
+  const gitExecutable = execFileSync('where.exe', ['git'], { encoding: 'utf8' })
+    .split(/\r?\n/)
+    .find(Boolean);
+  shellExecutable = join(dirname(gitExecutable), '..', 'bin', 'sh.exe');
+  assert.ok(existsSync(shellExecutable), 'Windows 必须使用 Git 自带的 sh.exe 执行 hook');
+}
+
+const hookFixtureDir = mkdtempSync(join(tmpdir(), 'codex-yi-hook-'));
+try {
+  const chineseMessage = join(hookFixtureDir, 'chinese.txt');
+  const englishMessage = join(hookFixtureDir, 'english.txt');
+  writeFileSync(chineseMessage, '修复：验证中文提交\n', 'utf8');
+  writeFileSync(englishMessage, 'fix: english only\n', 'utf8');
+
+  let chineseAccepted = true;
+  try {
+    execFileSync(shellExecutable, [join(repoRoot, '.githooks', 'commit-msg'), chineseMessage], { stdio: 'pipe' });
+  } catch {
+    chineseAccepted = false;
+  }
+  assert.equal(chineseAccepted, true, 'commit-msg hook 必须接受 UTF-8 中文提交');
+
+  let englishRejected = false;
+  try {
+    execFileSync(shellExecutable, [join(repoRoot, '.githooks', 'commit-msg'), englishMessage], { stdio: 'pipe' });
+  } catch (error) {
+    englishRejected = error.status === 1;
+  }
+  assert.equal(englishRejected, true, 'commit-msg hook 必须拒绝不含中文的提交');
+} finally {
+  rmSync(hookFixtureDir, { recursive: true, force: true });
+}
 
 const files = execFileSync('git', [
   '-c',
