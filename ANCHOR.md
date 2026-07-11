@@ -1,4 +1,4 @@
-# anchor.md
+# ANCHOR.md
 
 本项目“元约定”的单一真源（Single Source of Truth）。每次改动前通读本文件；改动完成后回写本文件，确保协作与技术路径同步。
 
@@ -57,6 +57,12 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.5（test/bugfix）：repository hygiene 只扫描 Git 已跟踪路径，排除未跟踪本地草稿对验证的干扰
+- v1.7.4（test/chore）：commit-msg hook 忽略注释化模板提示，拒绝“英文内容 + 中文模板”的假阳性
+- v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
+- v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
+- v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
+- v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 - v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
@@ -70,7 +76,7 @@
 - v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
-- v1.0.0（feature）：新增协作文档 `agents.md` 与锚点文档 `anchor.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
+- v1.0.0（feature）：新增协作文档 `AGENTS.md` 与锚点文档 `ANCHOR.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
 
 > 说明：超出最近5个版本的记录请转入归档文件（如 `CHANGELOG-ARCHIVE.md`）。
 
@@ -83,7 +89,7 @@
 
 - 目标：以不提交代码为前提，完成文档落地与验证
 - 步骤：
-- 阅读本锚点 → 更新`Agents.md` → 新增`anchor.md` → 在“最近14个版本变更日志”登记`v1.0.0`
+- 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
 
@@ -93,12 +99,12 @@
 - 改动概述：建立AI协作与锚点机制
 - 影响模块：文档与协作流程
 - 变更文件与补丁摘要：
-  - 更新 `Agents.md`：新增角色、流程、提示词、审计规范
-  - 新增 `anchor.md`：顶层约定、检查清单、审计模板、5版本日志
+  - 更新 `AGENTS.md`：新增角色、流程、提示词、审计规范
+  - 新增 `ANCHOR.md`：顶层约定、检查清单、审计模板、5版本日志
 - 验证步骤与结果：
   - PowerShell 手动验证建议：
-    - `Get-Content -Path .\Agents.md -TotalCount 10`
-    - `Get-Content -Path .\anchor.md -TotalCount 10`
+    - `Get-Content -Path .\AGENTS.md -TotalCount 10`
+    - `Get-Content -Path .\ANCHOR.md -TotalCount 10`
   - 结果：两文件存在且包含约定与模板
 - 风险与后续事项：
   - 后续需逐步填充“项目地图”与“关键逻辑链路”
@@ -107,10 +113,10 @@
 ## 审计记录：v1.1.0
 
 - 变更版本：v1.1.0（arch/docs）
-- 改动概述：梳理项目结构、架构与技术路径；更新 `anchor.md` 的“项目地图”与“关键逻辑链路”；新增验证建议与版本日志
+- 改动概述：梳理项目结构、架构与技术路径；更新 `ANCHOR.md` 的“项目地图”与“关键逻辑链路”；新增验证建议与版本日志
 - 影响模块：文档与协作流程（代码无改动）
 - 变更文件与补丁摘要：
-  - 更新 `anchor.md`：替换“项目地图”占位；新增关键逻辑链路；登记变更日志；新增本审计记录
+  - 更新 `ANCHOR.md`：替换“项目地图”占位；新增关键逻辑链路；登记变更日志；新增本审计记录
 - 验证步骤与结果：
   - PowerShell 手动验证建议：
     - `Select-String -Path .\apps\yi\js\app.js -Pattern "registerModule" | Measure-Object`
@@ -131,7 +137,7 @@
   - 新增 `docs/plans/2026-07-11-issue-pr-remediation-plan.md`：将分层 PR 细化为文件、测试、实现、验证和远端复核步骤
   - 新增 `LICENSE`：采用 MIT License，版权行为 `jiao-ling and contributors`
   - 新增 `apps/yi/tests/validate-project.mjs`：校验许可证、64/8 数据规模、JSON/JS fallback 一致性与 JavaScript 语法
-  - 更新 `anchor.md`：登记本次设计基线与审计记录
+  - 更新 `ANCHOR.md`：登记本次设计基线与审计记录
 - 验证步骤与结果：
   - `node apps/yi/tests/validate-project.mjs`：通过；MIT 许可证、64/8 数据快照、fallback 一致性和 JavaScript 语法均有效
   - `git diff --check`：通过；无空白错误
@@ -327,3 +333,103 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 新增权限仅为读取 Pages 配置，不扩大 artifact 上传或部署写权限
+
+## 审计记录：v1.7.0
+
+- 变更版本：v1.7.0（docs/chore）
+- 改动概述：建立 Windows/CI 一致的文档命名、换行、中文提交与 repository hygiene 基线
+- 影响模块：根协作文档、Git 属性、本地 Git 配置资产、项目校验、历史空白噪声
+- 变更文件与补丁摘要：
+  - `AGENTS.md`、`ANCHOR.md`：完成 case-only rename，统一仓库内引用，并记录 PowerShell 初始化与验证命令
+  - `.gitattributes`：对 Markdown、HTML、CSS、JavaScript、JSON、YAML、SVG 与 hooks 明确 LF 策略
+  - `.githooks/commit-msg`、`.gitmessage`：提供可选的本地中文提交校验和模板，不影响 CI
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：校验精确文件名、引用、属性规则、hook/template、尾随空白与单一 EOF 换行
+  - `apps/yi/tests/validate-project.mjs`：将 repository hygiene 纳入统一项目校验
+  - `help-module.js`、`knowledge-module.js`、`search-module.js`、`hexagram-data-service-module.js`、`.gitignore`：移除被新契约识别的既有空白噪声
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；命名、引用、EOL 规则、Git 资产与空白契约有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全、CI workflow、repository hygiene 与基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - `.gitattributes` 约束后续 checkout/commit 的规范行尾，本 PR 不批量重写无关文件以避免大范围噪声
+  - 本地 hook 需开发者显式运行 `git config core.hooksPath .githooks`，CI 不依赖该 hook
+
+## 审计记录：v1.7.1
+
+- 变更版本：v1.7.1（test/docs）
+- 改动概述：修复 Git C 风格路径引号导致非 ASCII Markdown 漏扫的 hygiene 假阳性
+- 影响模块：repository hygiene、`.trae/documents` 历史计划文档
+- 变更文件与补丁摘要：
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：使用 `git -c core.quotePath=false ls-files -z` 并按 NUL 分割真实路径
+  - `.trae/documents/*.md`：统一 `AGENTS.md/ANCHOR.md` 内容引用并修复单一 EOF 换行
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；非 ASCII 路径进入真实扫描且全部文本契约有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 保留历史文档文件名不变，只修正内容引用与格式，避免无必要的路径迁移
+
+## 审计记录：v1.7.2
+
+- 变更版本：v1.7.2（test/chore）
+- 改动概述：用 Unicode 感知且跨 locale 的实现替代不可移植的 POSIX grep 中文范围
+- 影响模块：commit-msg hook、repository hygiene、PowerShell 初始化说明
+- 变更文件与补丁摘要：
+  - `.githooks/commit-msg`：使用 Node `\p{Script=Han}` 检测 UTF-8 中文字符
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：在 Windows 使用 Git 自带 `sh.exe`、在 Unix 使用 `sh` 真实执行 hook，验证中文提交退出 0、纯英文退出 1
+  - `AGENTS.md`：明确本地 hook 依赖 Node Unicode 检测
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；真实 Git shell 下中文提交退出 0、纯英文退出 1
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 本地启用 hook 前需确保 `node` 位于 PATH；这与项目统一验证入口的运行要求一致
+
+## 审计记录：v1.7.3
+
+- 变更版本：v1.7.3（test/chore）
+- 改动概述：修复强制 LF 属性与历史 mixed EOL 索引 blob 冲突导致全新 checkout 立即变脏的问题
+- 影响模块：Git 换行策略、repository hygiene、核心静态源文件
+- 变更文件与补丁摘要：
+  - `apps/yi/css/styles.css`、`apps/yi/index.html`、`apps/yi/js/app.js`：仅将索引内 mixed EOL 归一化为 LF，不改变文本语义
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：要求所有匹配 `text eol=lf` 的已跟踪文件在 Git 索引中实际为 LF
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；LF 属性与索引 EOL 一致
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - 全新 detached worktree 的 `git status --short`：无输出
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 3 个源文件在 Git diff 中会显示整文件换行变更，已用忽略行尾差异的 diff 验证无语义改动
+
+## 审计记录：v1.7.4
+
+- 变更版本：v1.7.4（test/chore）
+- 改动概述：防止中文提交模板的提示文本让纯英文实际内容绕过 commit-msg hook
+- 影响模块：commit-msg hook、提交模板、repository hygiene、PowerShell 启用说明
+- 变更文件与补丁摘要：
+  - `.gitmessage`：将所有指导文本改为 `#` 注释行，不再成为实际提交内容
+  - `.githooks/commit-msg`：检测 Han 字符前排除注释行
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：真实执行 hook 并覆盖“英文摘要 + 中文模板”拒绝路径
+  - `AGENTS.md`：记录 hook 忽略模板注释的边界
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；中文内容放行，纯英文与带模板的纯英文内容均拒绝
+  - `node apps/yi/tests/validate-project.mjs`：通过；所有项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 以 `#` 开头的行按 Git 默认提交注释处理，不参与中文校验
+
+## 审计记录：v1.7.5
+
+- 变更版本：v1.7.5（test/bugfix）
+- 改动概述：修正 repository hygiene 的输入边界，使统一验证只取决于版本库文件
+- 影响模块：repository hygiene、PowerShell 本地验证说明
+- 变更文件与补丁摘要：
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：移除 `git ls-files --others`，只扫描 `--cached` 返回的 Git 已跟踪/已暂存路径
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：新增未跟踪 Markdown fixture，验证旧文件名和行尾空白不会污染仓库校验
+  - `AGENTS.md`：明确 hygiene 排除未跟踪本地草稿
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；未跟踪 fixture 不进入扫描，fixture 执行后已清理
+  - `node apps/yi/tests/validate-project.mjs`：通过；全部项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 未暂存的新文件不会进入 hygiene；新文件在提交前需先 `git add`，即纳入 `--cached` 输入

@@ -65,7 +65,8 @@ function validateContractTests() {
     'apps/yi/tests/data-service-contract.mjs',
     'apps/yi/tests/hexagram-content-contract.mjs',
     'apps/yi/tests/history-security-contract.mjs',
-    'apps/yi/tests/ci-workflow-contract.mjs'
+    'apps/yi/tests/ci-workflow-contract.mjs',
+    'apps/yi/tests/repository-hygiene-contract.mjs'
   ];
 
   for (const contract of contracts) {
