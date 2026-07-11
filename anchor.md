@@ -56,6 +56,8 @@
 
 ## 最近14个版本变更日志
 
+- v1.3.1（bugfix）：保留首次打开 Modal 的外部焦点来源，避免相关卦象内导航覆盖 opener；补充焦点恢复行为回归测试
+- v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
 - v1.0.0（feature）：新增协作文档 `agents.md` 与锚点文档 `anchor.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
@@ -127,3 +129,39 @@
 - 风险与后续事项：
   - 设计文档不改变运行时行为；后续各层 PR 必须分别补充测试证据
   - GitHub Issue 编号由远端创建结果确定，依赖关系在创建后使用实际编号回填到 Issue 正文
+
+## 审计记录：v1.3.0
+
+- 变更版本：v1.3.0（bugfix）
+- 改动概述：修复静态资源、搜索、投掷重置、分析器就绪和基础焦点管理问题
+- 影响模块：页面入口、样式、App 启动、divination、search、knowledge、hexagram-analyzer、modal、测试
+- 变更文件与补丁摘要：
+  - `apps/yi/index.html`、`apps/yi/css/styles.css`、`apps/yi/favicon.svg`：使用本地 favicon 和系统字体，修正“风”标签与搜索推荐容器 id
+  - `apps/yi/js/modules/search-module.js`、`knowledge-module.js`：支持 1–64 卦序查询、跨详情字段分类、正则转义，并收敛推荐区 DOM 所有权
+  - `apps/yi/js/modules/divination-module.js`：以投掷 generation 使重置前的异步回调失效
+  - `apps/yi/js/modules/hexagram-analyzer-module.js`：数据完整就绪后再渲染与分析
+  - `apps/yi/js/app.js`：移除模拟启动延迟和重复全局错误监听
+  - `apps/yi/js/modules/modal-module.js`：补充 Tab 焦点循环与关闭后的焦点恢复
+  - `apps/yi/tests/static-ui-contract.mjs`、`validate-project.mjs`：加入确定性交互契约并纳入项目校验
+- 验证步骤与结果：
+  - `node apps/yi/tests/static-ui-contract.mjs`：通过；卦序、特殊字符、分类和重置竞态契约成立
+  - `node apps/yi/tests/validate-project.mjs`：通过；基础快照、语法和静态交互契约全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 模态框只完成焦点循环和恢复；完整语义、对比度与键盘路径继续由 #8 跟踪
+  - 移动端布局、生命周期重启、CI 门禁和内容数据校正不在本层 PR 范围
+
+## 审计记录：v1.3.1
+
+- 变更版本：v1.3.1（bugfix）
+- 改动概述：修复 Modal 内相关卦象导航覆盖最初外部 opener 的焦点恢复问题
+- 影响模块：modal、静态交互契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/modules/modal-module.js`：仅在 hidden → visible 转换时捕获 `lastFocusedElement`
+  - `apps/yi/tests/static-ui-contract.mjs`：覆盖首次打开、Modal 内二次 show、关闭后恢复原 opener 的完整行为
+- 验证步骤与结果：
+  - `node apps/yi/tests/static-ui-contract.mjs`：通过；Modal 内二次 show 后关闭会恢复最初外部 opener
+  - `node apps/yi/tests/validate-project.mjs`：通过；许可证、64/8 快照、fallback、JavaScript 语法和静态交互契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 只改变已打开 Modal 内导航时的焦点来源保留，不改变首次打开、Tab 焦点循环或 Escape 关闭行为

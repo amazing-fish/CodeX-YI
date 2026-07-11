@@ -592,7 +592,6 @@ const YizhiApp = (function() {
             ErrorHandler.handle(event.reason, 'Unhandled Promise Rejection');
         });
 
-        await Utils.delay(200); // 模拟初始化时间
     }
 
     /**
@@ -637,7 +636,6 @@ const YizhiApp = (function() {
         // 初始化键盘导航
         initKeyboardNavigation();
 
-        await Utils.delay(200); // 模拟初始化时间
     }
 
     /**
@@ -953,13 +951,4 @@ document.addEventListener('DOMContentLoaded', async function() {
         `;
         document.body.appendChild(errorMessage);
     }
-});
-
-// 错误边界 - 捕获未处理的错误
-window.addEventListener('error', (event) => {
-    console.error('全局错误:', event.error);
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('未处理的Promise拒绝:', event.reason);
 });

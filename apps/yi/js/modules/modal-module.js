@@ -13,6 +13,7 @@ const ModalModule = (function() {
 
     let currentHexagram = null;
     let isVisible = false;
+    let lastFocusedElement = null;
 
     // 初始化
     function init() {
@@ -53,6 +54,9 @@ const ModalModule = (function() {
                         saveCurrentHexagram();
                     }
                     break;
+                case 'Tab':
+                    trapFocus(e);
+                    break;
                 default:
                     break;
             }
@@ -68,6 +72,9 @@ const ModalModule = (function() {
 
         try {
             currentHexagram = hexagram;
+            if (!isVisible && document.activeElement instanceof HTMLElement) {
+                lastFocusedElement = document.activeElement;
+            }
 
             // 显示加载状态
             showLoading();
@@ -114,8 +121,53 @@ const ModalModule = (function() {
             if (modalContent) {
                 modalContent.innerHTML = '';
             }
+
+            if (lastFocusedElement && lastFocusedElement.isConnected) {
+                lastFocusedElement.focus();
+            }
+            lastFocusedElement = null;
         } catch (error) {
             YizhiApp.errors.handle(error, 'Hide Modal');
+        }
+    }
+
+    function getFocusableElements() {
+        if (!modal) return [];
+
+        const selectors = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])'
+        ];
+
+        return Array.from(modal.querySelectorAll(selectors.join(','))).filter((element) => {
+            return element instanceof HTMLElement && element.offsetParent !== null;
+        });
+    }
+
+    function trapFocus(event) {
+        const focusableElements = getFocusableElements();
+        if (focusableElements.length === 0) {
+            event.preventDefault();
+            return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        const activeElement = document.activeElement;
+
+        if (event.shiftKey && activeElement === firstElement) {
+            event.preventDefault();
+            lastElement.focus();
+            return;
+        }
+
+        if (!event.shiftKey && activeElement === lastElement) {
+            event.preventDefault();
+            firstElement.focus();
         }
     }
 

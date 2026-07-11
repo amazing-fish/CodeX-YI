@@ -24,7 +24,13 @@ const HexagramAnalyzerModule = (function() {
     function init() {
         try {
             bindEvents();
-            initQuickCombinations();
+
+            YizhiApp.events.on('hexagram-data:ready', () => {
+                renderQuickCombinations();
+                analyzeCombination();
+            });
+
+            renderQuickCombinations();
         } catch (error) {
             YizhiApp.errors.handle(error, 'Hexagram Analyzer Module Init');
         }
@@ -37,8 +43,11 @@ const HexagramAnalyzerModule = (function() {
     }
 
     // 初始化常用组合
-    function initQuickCombinations() {
+    function renderQuickCombinations() {
         if (!quickComboGrid) return;
+
+        quickComboGrid.innerHTML = '';
+        if (!YizhiApp.getModule('hexagramData')?.isInitialized) return;
 
         const fragment = document.createDocumentFragment();
         commonCombinations.forEach(combo => {
