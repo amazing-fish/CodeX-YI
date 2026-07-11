@@ -15,6 +15,15 @@ const HexagramDataService = (function() {
         艮: '100',
         兑: '011'
     });
+    const REQUIRED_BAGUA_TEXT_FIELDS = Object.freeze([
+        'symbol',
+        'nature',
+        'attribute',
+        'direction',
+        'animal',
+        'element',
+        'family'
+    ]);
 
     let rawHexagramData = null;
     let hexagramMap = {};
@@ -208,9 +217,14 @@ const HexagramDataService = (function() {
         const snapshot = YizhiApp.utils.deepClone(data);
         for (const name of requiredNames) {
             const bagua = snapshot[name];
-            if (!isPlainObject(bagua) || typeof bagua.symbol !== 'string' ||
-                typeof bagua.binary !== 'string' || !/^[01]{3}$/.test(bagua.binary)) {
+            if (!isPlainObject(bagua) || typeof bagua.binary !== 'string' ||
+                !/^[01]{3}$/.test(bagua.binary)) {
                 throw new Error(`Bagua ${name} is invalid.`);
+            }
+            const invalidTextField = REQUIRED_BAGUA_TEXT_FIELDS.find(field =>
+                typeof bagua[field] !== 'string' || bagua[field].trim() === '');
+            if (invalidTextField) {
+                throw new Error(`Bagua ${name} must have a non-empty ${invalidTextField} field.`);
             }
             if (bagua.binary !== REQUIRED_BAGUA_BINARIES[name]) {
                 throw new Error(`Bagua ${name} must use canonical binary ${REQUIRED_BAGUA_BINARIES[name]}.`);

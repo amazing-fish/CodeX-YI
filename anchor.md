@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
 - v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
@@ -251,3 +252,22 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - canonical 映射与现有数据、上下卦下拉框和分析器契约一致；别名或交换编码不再被接受
+
+## 审计记录：v1.5.4
+
+- 变更版本：v1.5.4（bugfix）
+- 改动概述：补齐 localStorage 读取异常回退与八卦用户可见字段完整性边界
+- 影响模块：StorageManager、hexagram-data service、历史与数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`：单独捕获 localStorage.getItem 访问异常；不吞掉可继续读取的 legacy sessionStorage
+  - `apps/yi/js/services/hexagram-data-service-module.js`：要求 `symbol/nature/attribute/direction/animal/element/family` 全部为非空字符串
+  - `apps/yi/tests/history-security-contract.mjs`：覆盖 localStorage 读取抛 SecurityError 后仍读取 legacy 值
+  - `apps/yi/tests/data-service-contract.mjs`：覆盖缺失 `nature` 时快照保持 not-ready
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；localStorage 读取异常后仍返回 legacy 值
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；缺失 `nature` 的八卦快照保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - localStorage 中存在但 JSON 畸形的当前值仍严格失败，不会降级读取 legacy 格式
+  - 缺失展示字段的八卦快照会失败关闭，避免 ready 后向 UI 泄漏 `undefined`

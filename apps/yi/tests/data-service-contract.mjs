@@ -115,6 +115,10 @@ const swappedBaguaBinaries = clone(validBagua);
   [swappedBaguaBinaries.坤.binary, swappedBaguaBinaries.乾.binary];
 await assertRejectedSnapshot(validHexagrams, swappedBaguaBinaries, '交换乾坤编码的八卦 payload');
 
+const missingBaguaDisplayField = clone(validBagua);
+delete missingBaguaDisplayField.乾.nature;
+await assertRejectedSnapshot(validHexagrams, missingBaguaDisplayField, '缺少 nature 展示字段的八卦 payload');
+
 const invalidFallback = createService({}, validBagua, { transportFailure: true });
 await invalidFallback.service.init();
 assert.equal(invalidFallback.service.isInitialized, false, '非法 fallback 也必须失败关闭');

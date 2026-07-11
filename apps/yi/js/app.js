@@ -189,7 +189,12 @@ const StorageManager = {
 
         try {
             if (typeof localStorage !== 'undefined') {
-                const item = localStorage.getItem(fullKey);
+                let item = null;
+                try {
+                    item = localStorage.getItem(fullKey);
+                } catch (localReadError) {
+                    console.warn('Local storage read failed; trying legacy storage:', localReadError);
+                }
                 if (item) {
                     return JSON.parse(item);
                 }

@@ -243,6 +243,40 @@ function testLegacyReadSurvivesMigrationWriteFailure() {
   assert.equal(removeCalls, 0, '迁移写入失败时不得删除 sessionStorage 原值');
 }
 
+function testLegacyReadSurvivesLocalReadFailure() {
+  const appSource = readFileSync(join(appRoot, 'js/app.js'), 'utf8');
+  const start = appSource.indexOf('const StorageManager = {');
+  const end = appSource.indexOf('// 性能监控器', start);
+  assert.ok(start >= 0 && end > start, '应能定位真实 StorageManager 实现');
+
+  let sessionReads = 0;
+  const sandbox = {
+    console: { warn() {} },
+    APP_CONFIG: { storage: { prefix: 'yizhi_' } },
+    localStorage: {
+      getItem() { throw new Error('SecurityError'); },
+      setItem() { throw new Error('SecurityError'); }
+    },
+    sessionStorage: {
+      getItem(key) {
+        sessionReads += 1;
+        return key === 'yizhi_divination_history'
+          ? JSON.stringify([{ id: 'legacy-after-read-failure' }])
+          : null;
+      },
+      removeItem() { throw new Error('must preserve legacy value'); }
+    }
+  };
+  const storageSource = appSource.slice(start, end);
+  vm.createContext(sandbox);
+  vm.runInContext(`${storageSource}\nglobalThis.__storage = StorageManager;`, sandbox);
+
+  const value = sandbox.__storage.getItem('divination_history', []);
+  assert.equal(JSON.stringify(value), JSON.stringify([{ id: 'legacy-after-read-failure' }]),
+    'localStorage 读取失败后仍应尝试并返回可读的 legacy 值');
+  assert.equal(sessionReads, 1, 'localStorage 读取失败不得跳过 sessionStorage');
+}
+
 function testModalPersistenceBoundary() {
   const document = createDocument();
   const state = createApp(document, []);
@@ -272,4 +306,5 @@ testHistoryCodecAndRendering();
 testModalPersistenceBoundary();
 testPersistentStorageConfiguration();
 testLegacyReadSurvivesMigrationWriteFailure();
+testLegacyReadSurvivesLocalReadFailure();
 console.log('History security contract passed.');
