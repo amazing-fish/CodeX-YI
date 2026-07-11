@@ -77,7 +77,7 @@ const ModalModule = (function() {
             if (modalSaveBtn) {
                 modalSaveBtn.disabled = !currentHexagram;
             }
-            if (document.activeElement instanceof HTMLElement) {
+            if (!isVisible && document.activeElement instanceof HTMLElement) {
                 lastFocusedElement = document.activeElement;
             }
 
