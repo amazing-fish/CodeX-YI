@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
 - v1.0.0（feature）：新增协作文档 `agents.md` 与锚点文档 `anchor.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
 
@@ -107,3 +108,22 @@
   - 结果：模块注册与脚本顺序、数据服务回退与事件均与锚点记录一致
 - 风险与后续事项：
   - 持续维护“项目地图”与“关键逻辑链路”，模块增删或逻辑调整须同步回写
+
+## 审计记录：v1.2.0
+
+- 变更版本：v1.2.0（docs）
+- 改动概述：补充 MIT 许可证和项目校验入口，固化当前问题治理、GitHub Issue 分类和四层 PR 设计
+- 影响模块：文档与协作流程（运行时代码无改动）
+- 变更文件与补丁摘要：
+  - 新增 `docs/plans/2026-07-11-issue-pr-remediation-design.md`：记录目标、约束、10 个 Issue、4 层 PR、关键不变量与验证策略
+  - 新增 `docs/plans/2026-07-11-issue-pr-remediation-plan.md`：将分层 PR 细化为文件、测试、实现、验证和远端复核步骤
+  - 新增 `LICENSE`：采用 MIT License，版权行为 `jiao-ling and contributors`
+  - 新增 `apps/yi/tests/validate-project.mjs`：校验许可证、64/8 数据规模、JSON/JS fallback 一致性与 JavaScript 语法
+  - 更新 `anchor.md`：登记本次设计基线与审计记录
+- 验证步骤与结果：
+  - `node apps/yi/tests/validate-project.mjs`：通过；MIT 许可证、64/8 数据快照、fallback 一致性和 JavaScript 语法均有效
+  - `git diff --check`：通过；无空白错误
+  - 文档内 Issue、PR 和验证边界与已批准方案逐项核对
+- 风险与后续事项：
+  - 设计文档不改变运行时行为；后续各层 PR 必须分别补充测试证据
+  - GitHub Issue 编号由远端创建结果确定，依赖关系在创建后使用实际编号回填到 Issue 正文
