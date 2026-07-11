@@ -5,7 +5,16 @@ const HexagramDataService = (function() {
 
     const DATA_URL = 'data/hexagrams.json';
     const BAGUA_DATA_URL = 'data/bagua.json';
-    const REQUIRED_BAGUA_NAMES = ['乾', '坤', '震', '巽', '坎', '离', '艮', '兑'];
+    const REQUIRED_BAGUA_BINARIES = Object.freeze({
+        乾: '111',
+        坤: '000',
+        震: '001',
+        巽: '110',
+        坎: '010',
+        离: '101',
+        艮: '100',
+        兑: '011'
+    });
 
     let rawHexagramData = null;
     let hexagramMap = {};
@@ -189,18 +198,22 @@ const HexagramDataService = (function() {
     }
 
     function validateBaguaData(data) {
-        if (!isPlainObject(data) || Object.keys(data).length !== REQUIRED_BAGUA_NAMES.length ||
-            REQUIRED_BAGUA_NAMES.some(name => !Object.prototype.hasOwnProperty.call(data, name))) {
+        const requiredNames = Object.keys(REQUIRED_BAGUA_BINARIES);
+        if (!isPlainObject(data) || Object.keys(data).length !== requiredNames.length ||
+            requiredNames.some(name => !Object.prototype.hasOwnProperty.call(data, name))) {
             throw new Error('Bagua data must contain the fixed keys 乾、坤、震、巽、坎、离、艮、兑.');
         }
 
         const binaryValues = new Set();
         const snapshot = YizhiApp.utils.deepClone(data);
-        for (const name of REQUIRED_BAGUA_NAMES) {
+        for (const name of requiredNames) {
             const bagua = snapshot[name];
             if (!isPlainObject(bagua) || typeof bagua.symbol !== 'string' ||
                 typeof bagua.binary !== 'string' || !/^[01]{3}$/.test(bagua.binary)) {
                 throw new Error(`Bagua ${name} is invalid.`);
+            }
+            if (bagua.binary !== REQUIRED_BAGUA_BINARIES[name]) {
+                throw new Error(`Bagua ${name} must use canonical binary ${REQUIRED_BAGUA_BINARIES[name]}.`);
             }
             if (binaryValues.has(bagua.binary)) {
                 throw new Error(`Bagua binary code ${bagua.binary} must be unique.`);

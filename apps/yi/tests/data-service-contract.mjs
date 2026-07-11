@@ -110,6 +110,11 @@ renamedBaguaKey.天 = renamedBaguaKey.乾;
 delete renamedBaguaKey.乾;
 await assertRejectedSnapshot(validHexagrams, renamedBaguaKey, '缺少固定乾键的八卦 payload');
 
+const swappedBaguaBinaries = clone(validBagua);
+[swappedBaguaBinaries.乾.binary, swappedBaguaBinaries.坤.binary] =
+  [swappedBaguaBinaries.坤.binary, swappedBaguaBinaries.乾.binary];
+await assertRejectedSnapshot(validHexagrams, swappedBaguaBinaries, '交换乾坤编码的八卦 payload');
+
 const invalidFallback = createService({}, validBagua, { transportFailure: true });
 await invalidFallback.service.init();
 assert.equal(invalidFallback.service.isInitialized, false, '非法 fallback 也必须失败关闭');

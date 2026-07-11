@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
 - v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
 - v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
@@ -235,3 +236,18 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 迁移失败会保留 sessionStorage，并在后续加载继续尝试；不会把失败误当成数据缺失
+
+## 审计记录：v1.5.3
+
+- 变更版本：v1.5.3（bugfix）
+- 改动概述：把八卦固定键约束深化为名称到 canonical 三位二进制的完整映射约束
+- 影响模块：hexagram-data service、数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：定义并校验 `乾=111`、`坤=000`、`震=001`、`巽=110`、`坎=010`、`离=101`、`艮=100`、`兑=011`
+  - `apps/yi/tests/data-service-contract.mjs`：交换乾/坤编码但保持格式与全局唯一性，验证快照仍失败关闭
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；交换乾/坤编码的 payload 保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - canonical 映射与现有数据、上下卦下拉框和分析器契约一致；别名或交换编码不再被接受
