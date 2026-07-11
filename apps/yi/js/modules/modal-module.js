@@ -72,7 +72,7 @@ const ModalModule = (function() {
 
         try {
             currentHexagram = hexagram;
-            if (document.activeElement instanceof HTMLElement) {
+            if (!isVisible && document.activeElement instanceof HTMLElement) {
                 lastFocusedElement = document.activeElement;
             }
 

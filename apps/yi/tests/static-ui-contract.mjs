@@ -19,6 +19,9 @@ class MockElement {
     this.innerHTML = '';
     this.className = '';
     this.disabled = false;
+    this.isConnected = true;
+    this.offsetParent = {};
+    this.focusCount = 0;
     this.children = [];
     this.listeners = new Map();
     this.attributes = new Map();
@@ -45,13 +48,25 @@ class MockElement {
     return this.attributes.get(name) ?? null;
   }
 
-  focus() {}
+  querySelector() {
+    return new MockElement();
+  }
+
+  querySelectorAll() {
+    return [];
+  }
+
+  focus() {
+    this.focusCount += 1;
+  }
 }
 
 function createDocument() {
   const elements = new Map();
   return {
     elements,
+    body: new MockElement('body'),
+    activeElement: null,
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, new MockElement(id));
       return elements.get(id);
@@ -66,7 +81,8 @@ function createDocument() {
       const fragment = new MockElement();
       fragment.isFragment = true;
       return fragment;
-    }
+    },
+    addEventListener() {}
   };
 }
 
@@ -207,7 +223,49 @@ async function testResetCancelsPendingThrow() {
   assert.equal(errors.length, 0, '取消旧投掷不应产生运行时错误');
 }
 
+function testModalPreservesOriginalOpener() {
+  const document = createDocument();
+  const originalOpener = document.getElementById('originalOpener');
+  const closeButton = document.getElementById('closeModal');
+  document.activeElement = originalOpener;
+  const errors = [];
+  const dataService = {
+    isInitialized: true,
+    getBagua() { return null; },
+    getRelatedHexagrams() { return {}; },
+    getHexagramById() { return null; }
+  };
+  const sandbox = {
+    console,
+    document,
+    HTMLElement: MockElement,
+    navigator: {},
+    window: { location: { href: 'https://example.test/' } },
+    setTimeout(callback) { callback(); return 1; },
+    YizhiApp: {
+      errors: { handle(error) { errors.push(error); } },
+      getModule(name) { return name === 'hexagramData' ? dataService : { show() {} }; },
+      utils: { generateId() { return 'id'; }, formatDate() { return ''; } }
+    }
+  };
+  const modal = evaluateModule('js/modules/modal-module.js', 'ModalModule', sandbox);
+  const first = { id: 1, name: '乾', explanation: '自强不息', lines: [] };
+  const related = { id: 2, name: '坤', explanation: '厚德载物', lines: [] };
+
+  modal.init();
+  modal.show(first);
+  document.activeElement = closeButton;
+  modal.show(related);
+  modal.hide();
+
+  assert.equal(originalOpener.focusCount, 1,
+    '模态框内切换相关卦象后仍应把焦点还给最初的外部 opener');
+  assert.equal(closeButton.focusCount, 2, '每次详情渲染都应聚焦关闭按钮');
+  assert.equal(errors.length, 0);
+}
+
 testStaticOwnershipAndStartupContracts();
 testSearchContract();
+testModalPreservesOriginalOpener();
 await testResetCancelsPendingThrow();
 console.log('Static UI contract passed.');
