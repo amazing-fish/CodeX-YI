@@ -44,7 +44,7 @@ node apps/yi/tests/validate-project.mjs
 
 - 所有 pull request（包括堆叠 PR）只运行 `validate`，执行 `node apps/yi/tests/validate-project.mjs`，不会构建或发布 Pages。
 - `main` push 和从 `main` 手动触发的 `workflow_dispatch` 必须先通过 `validate`，随后才会构建并部署 `apps/yi/`；其他 ref 即使手动触发也只验证。
-- workflow 默认只有 `contents: read`；`pages: write` 与 `id-token: write` 仅授予 `deploy-pages` job。
+- workflow 默认只有 `contents: read`；`build-pages` 额外获得读取 Pages 配置所需的 `pages: read`，`pages: write` 与 `id-token: write` 仅授予 `deploy-pages` job。
 - 所有第三方 Actions 固定到带版本注释的 commit SHA，升级时需同时更新 SHA、版本注释与 CI 契约测试。
 
 本地等价验证：
