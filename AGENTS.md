@@ -133,7 +133,7 @@ git diff --check
 
 - `core.hooksPath` 启用基于 Node Unicode 检测的中文提交信息校验；该 hook 忽略以 `#` 开头的模板注释，只影响显式启用它的本地仓库。
 - `commit.template` 启用中文提交指导注释，可按需取消本地配置。
-- 提交前运行统一校验与空白检查，结果同步记录到 `ANCHOR.md`。
+- 提交前运行统一校验与空白检查，结果同步记录到 `ANCHOR.md`；仓库 hygiene 只扫描 Git 已跟踪路径，不受未跟踪本地草稿影响。
 
 ---
 

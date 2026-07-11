@@ -85,18 +85,28 @@ try {
   rmSync(hookFixtureDir, { recursive: true, force: true });
 }
 
-const files = execFileSync('git', [
-  '-c',
-  'core.quotePath=false',
-  'ls-files',
-  '-z',
-  '--cached',
-  '--others',
-  '--exclude-standard'
-], {
-  cwd: repoRoot,
-  encoding: 'utf8'
-}).split('\0').filter(Boolean);
+const untrackedFixtureName = '.repository-hygiene-untracked-fixture.md';
+const untrackedFixture = join(repoRoot, untrackedFixtureName);
+assert.equal(existsSync(untrackedFixture), false, '回归测试的未跟踪 fixture 不得预先存在');
+
+let files;
+try {
+  writeFileSync(untrackedFixture, 'anchor.md \t\n', 'utf8');
+  files = execFileSync('git', [
+    '-c',
+    'core.quotePath=false',
+    'ls-files',
+    '-z',
+    '--cached'
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  }).split('\0').filter(Boolean);
+  assert.equal(files.includes(untrackedFixtureName), false,
+    'repository hygiene 不得扫描未跟踪的本地文件');
+} finally {
+  rmSync(untrackedFixture, { force: true });
+}
 assert.ok(files.some(file => file.startsWith('.trae/documents/') && file.endsWith('.md')),
   '非 ASCII 路径下的 Markdown 必须以真实未引号化路径进入扫描');
 

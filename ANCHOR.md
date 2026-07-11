@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.5（test/bugfix）：repository hygiene 只扫描 Git 已跟踪路径，排除未跟踪本地草稿对验证的干扰
 - v1.7.4（test/chore）：commit-msg hook 忽略注释化模板提示，拒绝“英文内容 + 中文模板”的假阳性
 - v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
 - v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
@@ -396,3 +397,19 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 以 `#` 开头的行按 Git 默认提交注释处理，不参与中文校验
+
+## 审计记录：v1.7.5
+
+- 变更版本：v1.7.5（test/bugfix）
+- 改动概述：修正 repository hygiene 的输入边界，使统一验证只取决于版本库文件
+- 影响模块：repository hygiene、PowerShell 本地验证说明
+- 变更文件与补丁摘要：
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：移除 `git ls-files --others`，只扫描 `--cached` 返回的 Git 已跟踪/已暂存路径
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：新增未跟踪 Markdown fixture，验证旧文件名和行尾空白不会污染仓库校验
+  - `AGENTS.md`：明确 hygiene 排除未跟踪本地草稿
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；未跟踪 fixture 不进入扫描，fixture 执行后已清理
+  - `node apps/yi/tests/validate-project.mjs`：通过；全部项目契约有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 未暂存的新文件不会进入 hygiene；新文件在提交前需先 `git add`，即纳入 `--cached` 输入
