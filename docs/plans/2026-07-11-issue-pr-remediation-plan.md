@@ -107,4 +107,3 @@
 1. 查询四个 PR 的 base/head、draft 状态、checks 和关联 Issue。
 2. 确认没有自动合并、没有修改原始脏工作区。
 3. 汇总 Issue 分类、已关闭范围、后续 Issue、每个 PR 的本地验证与远端 CI 状态。
-
