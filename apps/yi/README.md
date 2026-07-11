@@ -40,8 +40,23 @@ node apps/yi/tests/validate-project.mjs
 ## 浏览器支持
 站点依赖浏览器原生 `fetch` 与 ES2020 语法，建议使用现代 Chromium、Firefox 或 Safari 浏览器访问。
 
-## 部署
-仓库通过 GitHub Pages 自动部署静态资源，配置位于 `.github/workflows/pages.yml`（如需调整请同步更新）。
+## 持续集成与部署
+
+`.github/workflows/pages.yml` 同时承担验证门禁与 GitHub Pages 部署：
+
+- 所有 pull request（包括堆叠 PR）只运行 `validate`，执行 `node apps/yi/tests/validate-project.mjs`，不会构建或发布 Pages。
+- `main` push 和从 `main` 手动触发的 `workflow_dispatch` 必须先通过 `validate`，随后才会构建并部署 `apps/yi/`；其他 ref 即使手动触发也只验证。
+- workflow 默认只有 `contents: read`；`build-pages` 额外获得读取 Pages 配置所需的 `pages: read`，`pages: write` 与 `id-token: write` 仅授予 `deploy-pages` job。
+- 所有第三方 Actions 固定到带版本注释的 commit SHA，升级时需同时更新 SHA、版本注释与 CI 契约测试。
+
+本地等价验证：
+
+```powershell
+node apps/yi/tests/validate-project.mjs
+git diff --check
+```
+
+若 `validate` 失败，先按输出定位具体的静态交互、数据服务、历史安全或 workflow 契约；部署 job 不会在验证失败时运行。workflow 合入 `main` 并首次成功后，再将分支保护的 required status check 设置为 `validate`。
 
 ## 范围说明
 当前工程专注于功能体验，未启用任何 PWA 相关资源或 Service Worker，避免额外依赖导致的加载失败。如需拓展跨端安装能力，可在后续迭代补充 `manifest.json`、图标和离线缓存策略。
