@@ -5,6 +5,7 @@ const HexagramDataService = (function() {
 
     const DATA_URL = 'data/hexagrams.json';
     const BAGUA_DATA_URL = 'data/bagua.json';
+    const REQUIRED_BAGUA_NAMES = ['乾', '坤', '震', '巽', '坎', '离', '艮', '兑'];
 
     let rawHexagramData = null;
     let hexagramMap = {};
@@ -188,13 +189,15 @@ const HexagramDataService = (function() {
     }
 
     function validateBaguaData(data) {
-        if (!isPlainObject(data) || Object.keys(data).length !== 8) {
-            throw new Error('Bagua data must contain exactly eight entries.');
+        if (!isPlainObject(data) || Object.keys(data).length !== REQUIRED_BAGUA_NAMES.length ||
+            REQUIRED_BAGUA_NAMES.some(name => !Object.prototype.hasOwnProperty.call(data, name))) {
+            throw new Error('Bagua data must contain the fixed keys 乾、坤、震、巽、坎、离、艮、兑.');
         }
 
         const binaryValues = new Set();
         const snapshot = YizhiApp.utils.deepClone(data);
-        for (const [name, bagua] of Object.entries(snapshot)) {
+        for (const name of REQUIRED_BAGUA_NAMES) {
+            const bagua = snapshot[name];
             if (!isPlainObject(bagua) || typeof bagua.symbol !== 'string' ||
                 typeof bagua.binary !== 'string' || !/^[01]{3}$/.test(bagua.binary)) {
                 throw new Error(`Bagua ${name} is invalid.`);

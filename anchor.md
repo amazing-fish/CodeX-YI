@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
 - v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
 - v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
 - v1.3.1（bugfix）：保留首次打开 Modal 的外部焦点来源，避免相关卦象内导航覆盖 opener；补充焦点恢复行为回归测试
@@ -203,3 +204,18 @@
 - 风险与后续事项：
   - 未通过 schema 的历史记录将被拒绝并从规范化存储中移除；合法旧记录会迁移为 version 1
   - 完整无障碍语义和应用 restart 生命周期继续由 #8、#6 独立跟踪
+
+## 审计记录：v1.5.1
+
+- 变更版本：v1.5.1（bugfix）
+- 改动概述：补齐八卦固定名称键约束，保证 ready 快照可被既有 UI 与分析器按名称查询
+- 影响模块：hexagram-data service、数据契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/services/hexagram-data-service-module.js`：要求八个固定卦名全部存在，再校验各自字段与二进制唯一性
+  - `apps/yi/tests/data-service-contract.mjs`：加入“保留 8 个唯一二进制但将乾重命名为天”的失败关闭回归用例
+- 验证步骤与结果：
+  - `node apps/yi/tests/data-service-contract.mjs`：通过；重命名固定卦名的 8 项 payload 保持 not-ready
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 固定名称是现有下拉框、常用组合和 `getBagua()` API 的公开契约；拒绝别名键属于预期的失败关闭行为

@@ -105,6 +105,11 @@ await assertRejectedSnapshot(invalidLines, validBagua, '非六爻结构');
 
 await assertRejectedSnapshot(validHexagrams, {}, '空八卦 payload');
 
+const renamedBaguaKey = clone(validBagua);
+renamedBaguaKey.天 = renamedBaguaKey.乾;
+delete renamedBaguaKey.乾;
+await assertRejectedSnapshot(validHexagrams, renamedBaguaKey, '缺少固定乾键的八卦 payload');
+
 const invalidFallback = createService({}, validBagua, { transportFailure: true });
 await invalidFallback.service.init();
 assert.equal(invalidFallback.service.isInitialized, false, '非法 fallback 也必须失败关闭');
