@@ -218,7 +218,7 @@ const SearchModule = (function() {
                 <div class="search-item-explanation">${highlightedExplanation}</div>
                 <div class="search-item-meta">
                     <span class="search-item-id">第${hexagram.id}卦</span>
-                    ${hexagram.upperTrigram && hexagram.lowerTrigram ? 
+                    ${hexagram.upperTrigram && hexagram.lowerTrigram ?
                         `<span class="search-item-trigrams">${hexagram.upperTrigram}${hexagram.lowerTrigram}</span>` : ''}
                 </div>
             </div>

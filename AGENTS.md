@@ -1,6 +1,6 @@
-# agents.md
+# AGENTS.md
 
-面向本项目的AI编码协作规范与提示词集合。与`anchor.md`配套使用：每次改动前通读锚点，改动后维护锚点与审计记录。
+面向本项目的AI编码协作规范与提示词集合。与 `ANCHOR.md` 配套使用：每次改动前通读锚点，改动后维护锚点与审计记录。
 
 ## 目的
 
@@ -13,7 +13,7 @@
 - Search Agent：跨文件/跨概念检索与综述（优先用于架构与高层搜索）
 - Code Reviewer：风格一致性、复杂度、边界与安全检查
 - Test Runner：测试方案设计与执行（单测、预览、脚本验证）
-- Docs Maintainer：维护`anchor.md`、更新审计与版本变更日志
+- Docs Maintainer：维护 `ANCHOR.md`、更新审计与版本变更日志
 
 ## 全局约定
 
@@ -28,7 +28,7 @@
 - 研究与检索：高层概念或跨域连接交给`Search Agent`优先处理
 - 实施：遵循项目风格，尽量修改现有文件；必要时最小新增
 - 验证：单测/预览/脚本验证；输出可复现步骤与结果
-- 审计：记录变更文件、补丁摘要、验证结果、风险与后续事项（写入`anchor.md`）
+- 审计：记录变更文件、补丁摘要、验证结果、风险与后续事项（写入 `ANCHOR.md`）
 
 ## 提示词模板（节选）
 
@@ -71,18 +71,18 @@
 
 ## 审计与可追溯
 
-- 每次改动必须在`anchor.md`记录：
+- 每次改动必须在 `ANCHOR.md` 记录：
 - 变更文件列表与补丁摘要
 - 验证步骤与结果（命令或脚本、预览地址）
 - 风险与后续事项（TODO/技术债）
 
 ## 维护责任
 
-- Docs Maintainer对`anchor.md`与版本日志的时效性负责
+- Docs Maintainer 对 `ANCHOR.md` 与版本日志的时效性负责
 - Owner Agent对流程执行一致性负责
 
 
-> 本文件供人类与编码智能体（IDE 内置 Agent、CLI 等）阅读与执行。  
+> 本文件供人类与编码智能体（IDE 内置 Agent、CLI 等）阅读与执行。
 > **沟通与协作一律使用简体中文**；提交信息与 PR 标题 **必须包含中文**。
 
 ---
@@ -121,6 +121,19 @@
 - 静态资源目录：`apps/yi/`
 - Pages 工作流：`.github/workflows/pages.yml`
 - 首次启用 Pages 时需在仓库 Settings → Pages 中设置 Source=GitHub Actions（当前已配置）。
+
+## 5) Windows PowerShell 本地初始化与验证
+
+```powershell
+git config core.hooksPath .githooks
+git config commit.template .gitmessage
+node apps/yi/tests/validate-project.mjs
+git diff --check
+```
+
+- `core.hooksPath` 启用中文提交信息校验；该 hook 只影响显式启用它的本地仓库，不影响 GitHub Actions。
+- `commit.template` 启用中文提交模板，可按需取消本地配置。
+- 提交前运行统一校验与空白检查，结果同步记录到 `ANCHOR.md`。
 
 ---
 

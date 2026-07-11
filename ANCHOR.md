@@ -1,4 +1,4 @@
-# anchor.md
+# ANCHOR.md
 
 本项目“元约定”的单一真源（Single Source of Truth）。每次改动前通读本文件；改动完成后回写本文件，确保协作与技术路径同步。
 
@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
@@ -67,7 +68,7 @@
 - v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
-- v1.0.0（feature）：新增协作文档 `agents.md` 与锚点文档 `anchor.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
+- v1.0.0（feature）：新增协作文档 `AGENTS.md` 与锚点文档 `ANCHOR.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
 
 > 说明：超出最近5个版本的记录请转入归档文件（如 `CHANGELOG-ARCHIVE.md`）。
 
@@ -80,7 +81,7 @@
 
 - 目标：以不提交代码为前提，完成文档落地与验证
 - 步骤：
-- 阅读本锚点 → 更新`Agents.md` → 新增`anchor.md` → 在“最近14个版本变更日志”登记`v1.0.0`
+- 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
 
@@ -90,12 +91,12 @@
 - 改动概述：建立AI协作与锚点机制
 - 影响模块：文档与协作流程
 - 变更文件与补丁摘要：
-  - 更新 `Agents.md`：新增角色、流程、提示词、审计规范
-  - 新增 `anchor.md`：顶层约定、检查清单、审计模板、5版本日志
+  - 更新 `AGENTS.md`：新增角色、流程、提示词、审计规范
+  - 新增 `ANCHOR.md`：顶层约定、检查清单、审计模板、5版本日志
 - 验证步骤与结果：
   - PowerShell 手动验证建议：
-    - `Get-Content -Path .\Agents.md -TotalCount 10`
-    - `Get-Content -Path .\anchor.md -TotalCount 10`
+    - `Get-Content -Path .\AGENTS.md -TotalCount 10`
+    - `Get-Content -Path .\ANCHOR.md -TotalCount 10`
   - 结果：两文件存在且包含约定与模板
 - 风险与后续事项：
   - 后续需逐步填充“项目地图”与“关键逻辑链路”
@@ -104,10 +105,10 @@
 ## 审计记录：v1.1.0
 
 - 变更版本：v1.1.0（arch/docs）
-- 改动概述：梳理项目结构、架构与技术路径；更新 `anchor.md` 的“项目地图”与“关键逻辑链路”；新增验证建议与版本日志
+- 改动概述：梳理项目结构、架构与技术路径；更新 `ANCHOR.md` 的“项目地图”与“关键逻辑链路”；新增验证建议与版本日志
 - 影响模块：文档与协作流程（代码无改动）
 - 变更文件与补丁摘要：
-  - 更新 `anchor.md`：替换“项目地图”占位；新增关键逻辑链路；登记变更日志；新增本审计记录
+  - 更新 `ANCHOR.md`：替换“项目地图”占位；新增关键逻辑链路；登记变更日志；新增本审计记录
 - 验证步骤与结果：
   - PowerShell 手动验证建议：
     - `Select-String -Path .\apps\yi\js\app.js -Pattern "registerModule" | Measure-Object`
@@ -128,7 +129,7 @@
   - 新增 `docs/plans/2026-07-11-issue-pr-remediation-plan.md`：将分层 PR 细化为文件、测试、实现、验证和远端复核步骤
   - 新增 `LICENSE`：采用 MIT License，版权行为 `jiao-ling and contributors`
   - 新增 `apps/yi/tests/validate-project.mjs`：校验许可证、64/8 数据规模、JSON/JS fallback 一致性与 JavaScript 语法
-  - 更新 `anchor.md`：登记本次设计基线与审计记录
+  - 更新 `ANCHOR.md`：登记本次设计基线与审计记录
 - 验证步骤与结果：
   - `node apps/yi/tests/validate-project.mjs`：通过；MIT 许可证、64/8 数据快照、fallback 一致性和 JavaScript 语法均有效
   - `git diff --check`：通过；无空白错误
@@ -290,3 +291,23 @@
 - 风险与后续事项：
   - required status check 必须在 workflow 合入 main 并首次产生 `validate` 后启用，避免在检查尚不存在时锁死 main
   - Actions 升级必须更新精确 SHA 与版本注释，不能退回浮动 tag
+
+## 审计记录：v1.7.0
+
+- 变更版本：v1.7.0（docs/chore）
+- 改动概述：建立 Windows/CI 一致的文档命名、换行、中文提交与 repository hygiene 基线
+- 影响模块：根协作文档、Git 属性、本地 Git 配置资产、项目校验、历史空白噪声
+- 变更文件与补丁摘要：
+  - `AGENTS.md`、`ANCHOR.md`：完成 case-only rename，统一仓库内引用，并记录 PowerShell 初始化与验证命令
+  - `.gitattributes`：对 Markdown、HTML、CSS、JavaScript、JSON、YAML、SVG 与 hooks 明确 LF 策略
+  - `.githooks/commit-msg`、`.gitmessage`：提供可选的本地中文提交校验和模板，不影响 CI
+  - `apps/yi/tests/repository-hygiene-contract.mjs`：校验精确文件名、引用、属性规则、hook/template、尾随空白与单一 EOF 换行
+  - `apps/yi/tests/validate-project.mjs`：将 repository hygiene 纳入统一项目校验
+  - `help-module.js`、`knowledge-module.js`、`search-module.js`、`hexagram-data-service-module.js`、`.gitignore`：移除被新契约识别的既有空白噪声
+- 验证步骤与结果：
+  - `node apps/yi/tests/repository-hygiene-contract.mjs`：通过；命名、引用、EOL 规则、Git 资产与空白契约有效
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全、CI workflow、repository hygiene 与基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - `.gitattributes` 约束后续 checkout/commit 的规范行尾，本 PR 不批量重写无关文件以避免大范围噪声
+  - 本地 hook 需开发者显式运行 `git config core.hooksPath .githooks`，CI 不依赖该 hook
