@@ -201,8 +201,12 @@ const StorageManager = {
                 if (legacyItem) {
                     const value = JSON.parse(legacyItem);
                     if (typeof localStorage !== 'undefined') {
-                        localStorage.setItem(fullKey, JSON.stringify(value));
-                        sessionStorage.removeItem(fullKey);
+                        try {
+                            localStorage.setItem(fullKey, JSON.stringify(value));
+                            sessionStorage.removeItem(fullKey);
+                        } catch (migrationError) {
+                            console.warn('Storage migration failed; using legacy value:', migrationError);
+                        }
                     }
                     return value;
                 }

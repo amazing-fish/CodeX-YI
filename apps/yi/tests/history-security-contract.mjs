@@ -210,6 +210,39 @@ function testPersistentStorageConfiguration() {
     '主题预初始化应优先读取持久化存储');
 }
 
+function testLegacyReadSurvivesMigrationWriteFailure() {
+  const appSource = readFileSync(join(appRoot, 'js/app.js'), 'utf8');
+  const start = appSource.indexOf('const StorageManager = {');
+  const end = appSource.indexOf('// 性能监控器', start);
+  assert.ok(start >= 0 && end > start, '应能定位真实 StorageManager 实现');
+
+  let removeCalls = 0;
+  const sandbox = {
+    console: { warn() {} },
+    APP_CONFIG: { storage: { prefix: 'yizhi_' } },
+    localStorage: {
+      getItem() { return null; },
+      setItem() { throw new Error('QuotaExceededError'); }
+    },
+    sessionStorage: {
+      getItem(key) {
+        return key === 'yizhi_divination_history'
+          ? JSON.stringify([{ id: 'legacy-record' }])
+          : null;
+      },
+      removeItem() { removeCalls += 1; }
+    }
+  };
+  const storageSource = appSource.slice(start, end);
+  vm.createContext(sandbox);
+  vm.runInContext(`${storageSource}\nglobalThis.__storage = StorageManager;`, sandbox);
+
+  const value = sandbox.__storage.getItem('divination_history', []);
+  assert.equal(JSON.stringify(value), JSON.stringify([{ id: 'legacy-record' }]),
+    '迁移写入 localStorage 失败时仍应返回已解析的 legacy 值');
+  assert.equal(removeCalls, 0, '迁移写入失败时不得删除 sessionStorage 原值');
+}
+
 function testModalPersistenceBoundary() {
   const document = createDocument();
   const state = createApp(document, []);
@@ -238,4 +271,5 @@ function testModalPersistenceBoundary() {
 testHistoryCodecAndRendering();
 testModalPersistenceBoundary();
 testPersistentStorageConfiguration();
+testLegacyReadSurvivesMigrationWriteFailure();
 console.log('History security contract passed.');

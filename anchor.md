@@ -56,6 +56,7 @@
 
 ## 最近14个版本变更日志
 
+- v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
 - v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
 - v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
 - v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
@@ -219,3 +220,18 @@
   - `git diff --check`：通过；无空白错误
 - 风险与后续事项：
   - 固定名称是现有下拉框、常用组合和 `getBagua()` API 的公开契约；拒绝别名键属于预期的失败关闭行为
+
+## 审计记录：v1.5.2
+
+- 变更版本：v1.5.2（bugfix）
+- 改动概述：隔离 legacy storage 的迁移写入失败，保证可读旧数据不会因 localStorage 限制而被隐藏
+- 影响模块：StorageManager、历史安全契约测试
+- 变更文件与补丁摘要：
+  - `apps/yi/js/app.js`：将 localStorage 写入和 sessionStorage 删除置于内层 best-effort try/catch；无论迁移是否成功都返回已解析旧值
+  - `apps/yi/tests/history-security-contract.mjs`：从真实 app.js 提取 StorageManager，覆盖 localStorage.setItem 抛错时返回 legacy 值且不删除旧记录
+- 验证步骤与结果：
+  - `node apps/yi/tests/history-security-contract.mjs`：通过；迁移写入失败时返回 legacy 值且未删除 sessionStorage
+  - `node apps/yi/tests/validate-project.mjs`：通过；静态交互、数据服务、历史安全及基础项目校验全部有效
+  - `git diff --check`：通过；无空白错误
+- 风险与后续事项：
+  - 迁移失败会保留 sessionStorage，并在后续加载继续尝试；不会把失败误当成数据缺失
