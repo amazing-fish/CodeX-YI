@@ -4,7 +4,7 @@
 const ThemeModule = (function() {
     // 私有变量
     const themeToggle = document.getElementById('themeToggle');
-    const body = document.body;
+    const rootElement = document.documentElement;
     const STORAGE_KEY = 'theme';
 
     // 初始化
@@ -13,7 +13,7 @@ const ThemeModule = (function() {
             // 检查存储中的主题设置
             const savedTheme = YizhiApp.storage.getItem(STORAGE_KEY);
             if (savedTheme === 'dark') {
-                body.setAttribute('data-theme', 'dark');
+                rootElement.setAttribute('data-theme', 'dark');
             }
 
             // 为主题切换按钮添加事件监听器
@@ -30,7 +30,11 @@ const ThemeModule = (function() {
             // 监听系统主题变化
             if (window.matchMedia) {
                 const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-                mediaQuery.addListener(handleSystemThemeChange);
+                if (typeof mediaQuery.addEventListener === 'function') {
+                    mediaQuery.addEventListener('change', handleSystemThemeChange);
+                } else if (typeof mediaQuery.addListener === 'function') {
+                    mediaQuery.addListener(handleSystemThemeChange);
+                }
             }
         } catch (error) {
             YizhiApp.errors.handle(error, 'Theme Module Init');
@@ -52,10 +56,10 @@ const ThemeModule = (function() {
     function setTheme(theme) {
         try {
             if (theme === 'dark') {
-                body.setAttribute('data-theme', 'dark');
+                rootElement.setAttribute('data-theme', 'dark');
                 YizhiApp.storage.setItem(STORAGE_KEY, 'dark');
             } else {
-                body.removeAttribute('data-theme');
+                rootElement.removeAttribute('data-theme');
                 YizhiApp.storage.setItem(STORAGE_KEY, 'light');
             }
 
@@ -68,7 +72,7 @@ const ThemeModule = (function() {
 
     // 获取当前主题
     function getCurrentTheme() {
-        return body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        return rootElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     }
 
     // 处理系统主题变化
