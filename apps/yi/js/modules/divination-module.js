@@ -35,6 +35,7 @@ const DivinationModule = (function() {
     let lines = [];
     let transformed = false;
     let animationInProgress = false;
+    let throwGeneration = 0;
     const positionCode = "010101";
 
     // 初始化
@@ -81,12 +82,15 @@ const DivinationModule = (function() {
     async function handleThrowCoins() {
         if (animationInProgress || lines.length >= 6) return;
 
+        const generation = throwGeneration;
+
         try {
             animationInProgress = true;
             throwCoinBtn.disabled = true;
 
             updateStep(1);
-            await throwThreeCoins();
+            const completed = await throwThreeCoins(generation);
+            if (!completed) return;
 
             updateProgress((lines.length / 6) * 100);
             updateProgressCount();
@@ -103,15 +107,17 @@ const DivinationModule = (function() {
         } catch (error) {
             YizhiApp.errors.handle(error, 'Throw Coins');
         } finally {
-            animationInProgress = false;
-            if (lines.length < 6) {
-                throwCoinBtn.disabled = false;
+            if (generation === throwGeneration) {
+                animationInProgress = false;
+                if (lines.length < 6) {
+                    throwCoinBtn.disabled = false;
+                }
             }
         }
     }
 
     // 投掷三枚铜钱
-    function throwThreeCoins() {
+    function throwThreeCoins(generation) {
         return new Promise((resolve) => {
             // 清空上一次的铜钱显示
             if (coinsDisplay) {
@@ -128,6 +134,11 @@ const DivinationModule = (function() {
 
             // 延迟开始动画
             setTimeout(() => {
+                if (generation !== throwGeneration) {
+                    resolve(false);
+                    return;
+                }
+
                 const results = [];
 
                 coinElements.forEach((coin, index) => {
@@ -142,6 +153,11 @@ const DivinationModule = (function() {
 
                 // 等待动画结束
                 setTimeout(() => {
+                    if (generation !== throwGeneration) {
+                        resolve(false);
+                        return;
+                    }
+
                     const sum = results.reduce((a, b) => a + b, 0);
                     const lineInfo = interpretCoinResult(sum);
 
@@ -150,7 +166,7 @@ const DivinationModule = (function() {
                     renderHexagram();
                     updateHexagramDisplay();
 
-                    resolve();
+                    resolve(true);
                 }, 1500);
             }, 100);
         });
@@ -534,6 +550,7 @@ const DivinationModule = (function() {
 
     // 重置占卜
     function resetDivination() {
+        throwGeneration += 1;
         lines = [];
         transformed = false;
         animationInProgress = false;

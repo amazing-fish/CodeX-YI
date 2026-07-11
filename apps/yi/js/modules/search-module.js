@@ -10,7 +10,7 @@ const SearchModule = (function() {
     const searchResults = document.getElementById('searchResults');
     const searchStats = document.getElementById('searchStats');
     const resultCount = document.getElementById('resultCount');
-    const featuredHexagrams = document.getElementById('featuredHexagrams');
+    const featuredHexagrams = document.getElementById('searchFeaturedHexagrams');
 
     let currentQuery = '';
     let currentCategory = '';
@@ -122,7 +122,13 @@ const SearchModule = (function() {
         let results = [];
 
         if (currentQuery) {
-            results = hexagramDataService.searchHexagrams(currentQuery);
+            const numericId = parseHexagramId(currentQuery);
+            if (numericId !== null) {
+                const hexagram = hexagramDataService.getHexagramById(numericId);
+                results = hexagram ? [hexagram] : [];
+            } else {
+                results = hexagramDataService.searchHexagrams(currentQuery);
+            }
         } else {
             results = hexagramDataService.getAllHexagrams();
         }
@@ -143,16 +149,38 @@ const SearchModule = (function() {
         switch (category) {
             case 'fortune':
                 return ['吉', '利', '亨', '元'].some(char =>
-                    hexagram.explanation.includes(char));
+                    getSearchableText(hexagram).includes(char));
             case 'career':
                 return ['进', '升', '行', '动'].some(char =>
-                    hexagram.explanation.includes(char));
+                    getSearchableText(hexagram).includes(char));
             case 'relationship':
                 return ['和', '合', '交', '比'].some(char =>
-                    hexagram.explanation.includes(char));
+                    getSearchableText(hexagram).includes(char));
             default:
                 return true;
         }
+    }
+
+    function parseHexagramId(query) {
+        if (!/^\d{1,2}$/.test(query)) return null;
+
+        const id = Number.parseInt(query, 10);
+        return id >= 1 && id <= 64 ? id : null;
+    }
+
+    function getSearchableText(hexagram) {
+        const lineContent = Array.isArray(hexagram.lines)
+            ? hexagram.lines.map(line => line?.content || '').join(' ')
+            : '';
+
+        return [
+            hexagram.name,
+            hexagram.explanation,
+            hexagram.overview,
+            hexagram.detail,
+            hexagram.judgment,
+            lineContent
+        ].filter(Boolean).join(' ');
     }
 
     // 显示搜索结果
@@ -207,8 +235,15 @@ const SearchModule = (function() {
     function highlightText(text, query) {
         if (!query || !text) return text;
 
-        const regex = new RegExp(`(${query})`, 'gi');
+        const escapedQuery = escapeRegExp(query);
+        if (!escapedQuery) return text;
+
+        const regex = new RegExp(`(${escapedQuery})`, 'gi');
         return text.replace(regex, '<mark>$1</mark>');
+    }
+
+    function escapeRegExp(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     // 显示空结果

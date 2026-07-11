@@ -59,9 +59,21 @@ function validateJavaScriptSyntax() {
   }
 }
 
+function validateContractTests() {
+  try {
+    execFileSync(process.execPath, ['apps/yi/tests/static-ui-contract.mjs'], {
+      cwd: repoRoot,
+      stdio: 'inherit'
+    });
+  } catch (error) {
+    failures.push(`Static UI contract failed with exit code ${error.status ?? 'unknown'}.`);
+  }
+}
+
 validateLicense();
 validateDataFallbacks();
 validateJavaScriptSyntax();
+validateContractTests();
 
 if (failures.length > 0) {
   console.error('Project validation failed:');

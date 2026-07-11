@@ -4,20 +4,12 @@
 const KnowledgeModule = (function() {
     // 私有变量
     const baguaGrid = document.getElementById('baguaGrid');
-    const featuredHexagrams = document.getElementById('featuredHexagrams');
-
-    // 精选卦象（用于展示）
-    const featuredHexagramIds = [1, 2, 11, 12, 63, 64]; // 乾、坤、泰、否、既济、未济
 
     // 初始化
     function init() {
         try {
             initBaguaKnowledge();
 
-            // 监听卦象数据准备完成事件
-            YizhiApp.events.on('hexagram-data:ready', () => {
-                initFeaturedHexagrams();
-            });
         } catch (error) {
             YizhiApp.errors.handle(error, 'Knowledge Module Init');
         }
@@ -132,51 +124,6 @@ const KnowledgeModule = (function() {
         };
 
         YizhiApp.getModule('modal')?.show(modalContent);
-    }
-
-    // 初始化精选卦象
-    function initFeaturedHexagrams() {
-        if (!featuredHexagrams) return;
-
-        try {
-            const hexagramDataService = YizhiApp.getModule('hexagramData');
-            if (!hexagramDataService?.isInitialized) return;
-
-            const fragment = document.createDocumentFragment();
-
-            featuredHexagramIds.forEach(id => {
-                const hexagram = hexagramDataService.getHexagramById(id);
-                if (hexagram) {
-                    const featuredItem = createFeaturedItem(hexagram);
-                    fragment.appendChild(featuredItem);
-                }
-            });
-
-            featuredHexagrams.innerHTML = '';
-            featuredHexagrams.appendChild(fragment);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Init Featured Hexagrams');
-        }
-    }
-
-    // 创建精选卦象项
-    function createFeaturedItem(hexagram) {
-        const item = document.createElement('div');
-        item.className = 'featured-item';
-
-        item.innerHTML = `
-            <div class="featured-symbol">${hexagram.unicode || ''}</div>
-            <div class="featured-info">
-                <div class="featured-name">${hexagram.name}</div>
-                <div class="featured-explanation">${hexagram.explanation}</div>
-            </div>
-        `;
-
-        item.addEventListener('click', () => {
-            YizhiApp.getModule('modal')?.show(hexagram);
-        });
-
-        return item;
     }
 
     return {
