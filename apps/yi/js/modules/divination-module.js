@@ -27,6 +27,8 @@ const DivinationModule = (function() {
         tab: 'primary'
     };
 
+    // 每次重置或载入占记都会递增；进行中的投掷在动画结束后比对代次，已过期则放弃写入
+    let generation = 0;
     let dataFailed = false;
     let axis = null;
 
@@ -86,6 +88,7 @@ const DivinationModule = (function() {
         }
 
         state.busy = true;
+        const ticket = generation;
         const tossed = YiCore.tossCoins();
         const line = YiCore.lineFromCoins(tossed);
         const duration = motionDuration();
@@ -97,6 +100,7 @@ const DivinationModule = (function() {
             status.textContent = '铜钱落定中…';
             await YizhiApp.utils.delay(duration + 120);
         }
+        if (ticket !== generation) return;
 
         state.lines.push(line);
         state.lastCoins = tossed;
@@ -111,8 +115,9 @@ const DivinationModule = (function() {
     async function castRemaining() {
         if (state.busy) return;
         state.fast = true;
+        const ticket = generation;
         try {
-            while (state.lines.length < 6) {
+            while (state.lines.length < 6 && ticket === generation) {
                 await castOnce();
             }
         } finally {
@@ -663,8 +668,16 @@ const DivinationModule = (function() {
         return state.lines.length > 0 && !state.savedId && !state.fromHistory;
     }
 
+    // 作废进行中的投掷：旧的 castOnce 在延时结束后会发现代次已变而不写入
+    function cancelPending() {
+        generation += 1;
+        state.busy = false;
+        state.fast = false;
+    }
+
     async function reset(options = {}) {
-        if (state.busy) return false;
+        // 界面按钮在投掷中禁用；外部强制重置（force）则取消进行中的投掷
+        if (state.busy && !options.force) return false;
         if (!options.force && hasUnsavedWork()) {
             const done = state.lines.length === 6;
             const confirmed = await YizhiApp.dialogs.confirm(
@@ -675,6 +688,7 @@ const DivinationModule = (function() {
             if (!confirmed) return false;
         }
 
+        cancelPending();
         const clearQuestion = state.lines.length === 6;
         Object.assign(state, {
             lines: [],
@@ -712,6 +726,7 @@ const DivinationModule = (function() {
             if (!confirmed) return false;
         }
 
+        cancelPending();
         Object.assign(state, {
             lines: record.lines.map(normalizeLine),
             lastCoins: null,

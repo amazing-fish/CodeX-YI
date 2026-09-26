@@ -35,6 +35,13 @@ function loadFallbackGlobal(relativePath, globalName) {
   return sandbox.window[globalName];
 }
 
+function validateLicense() {
+  assert(existsSync(join(repoRoot, 'LICENSE')), 'LICENSE must exist.');
+  const license = read('LICENSE');
+  assert(license.startsWith('MIT License'), 'LICENSE must use the MIT license text.');
+  assert(license.includes('jiao-ling and contributors'), 'LICENSE must identify the copyright holders.');
+}
+
 function validateDocs() {
   assert(existsSync(join(repoRoot, 'AGENTS.md')), 'AGENTS.md must exist at repo root.');
   assert(existsSync(join(repoRoot, 'ANCHOR.md')), 'ANCHOR.md must exist at repo root.');
@@ -133,12 +140,39 @@ function validateDataFallbacks() {
     'zhouyi.js fallback must match zhouyi.json.');
 }
 
-function validateCoreTests() {
-  try {
-    execFileSync(process.execPath, [join(__dirname, 'yijing-core.test.mjs')], { stdio: 'pipe' });
-  } catch (error) {
-    fail(`yijing-core tests failed:
-${String(error.stdout || error.message)}`);
+function validateJavaScriptSyntax() {
+  const files = execFileSync('git', ['ls-files', 'apps/yi/*.js', 'apps/yi/js/*.js', 'apps/yi/js/**/*.js'], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  }).split(/\r?\n/).filter(Boolean).filter(file => existsSync(join(repoRoot, file)));
+
+  for (const file of files) {
+    try {
+      execFileSync(process.execPath, ['--check', file], { cwd: repoRoot, stdio: 'pipe' });
+    } catch (error) {
+      fail(`${file} has invalid JavaScript syntax: ${error.stderr?.toString().trim() || error.message}`);
+    }
+  }
+}
+
+// 纯函数单测 + 各项契约测试（数据失败关闭、占记编解码与安全渲染、界面契约、CI 与仓库卫生）
+function validateTestSuites() {
+  const suites = [
+    'apps/yi/tests/yijing-core.test.mjs',
+    'apps/yi/tests/static-ui-contract.mjs',
+    'apps/yi/tests/data-service-contract.mjs',
+    'apps/yi/tests/hexagram-content-contract.mjs',
+    'apps/yi/tests/history-security-contract.mjs',
+    'apps/yi/tests/ci-workflow-contract.mjs',
+    'apps/yi/tests/repository-hygiene-contract.mjs'
+  ];
+
+  for (const suite of suites) {
+    try {
+      execFileSync(process.execPath, [suite], { cwd: repoRoot, stdio: 'inherit' });
+    } catch (error) {
+      fail(`${suite} failed with exit code ${error.status ?? 'unknown'}.`);
+    }
   }
 }
 
@@ -164,12 +198,14 @@ function validateWhitespace() {
   }
 }
 
+validateLicense();
 validateDocs();
 validateHtmlContracts();
 validateStorageContract();
 validateDataFallbacks();
-validateCoreTests();
+validateJavaScriptSyntax();
 validateWhitespace();
+validateTestSuites();
 
 if (failures.length > 0) {
   console.error('Project validation failed:');
@@ -179,4 +215,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Project validation passed.');
+console.log('Project validation passed: MIT license, docs, HTML contracts, 64/8/64 data snapshots with fallback parity, JavaScript syntax, core tests and contracts.');

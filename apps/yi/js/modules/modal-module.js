@@ -28,15 +28,12 @@ const ModalModule = (function() {
         });
     }
 
+    // 只渲染数据服务中的 canonical 卦：传入对象也仅取其卦序重新查询，查不到则不打开
     function resolve(input) {
         const data = YizhiApp.getModule('hexagramData');
-        if (typeof input === 'number') {
-            return data?.getHexagramById(input) || null;
-        }
-        if (input && input.id && data?.isInitialized) {
-            return data.getHexagramById(input.id) || input;
-        }
-        return input || null;
+        if (!data?.isInitialized) return null;
+        const id = typeof input === 'number' ? input : Number(input?.id);
+        return Number.isInteger(id) ? data.getHexagramById(id) || null : null;
     }
 
     function show(input) {
@@ -69,7 +66,6 @@ const ModalModule = (function() {
         const relations = ui.relationChips(hexagram);
         const classic = ui.classicBlock(hexagram);
         const wings = ui.wingsBlock(hexagram);
-        // 占记快照只有卦名与卦义，没有卦画与爻辞时不渲染对应段落
         const hasLines = hexagram.bits?.length === 6 && hexagram.lines?.length;
 
         body.innerHTML = `

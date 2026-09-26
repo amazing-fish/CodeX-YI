@@ -5,7 +5,7 @@
 
 const APP_CONFIG = Object.freeze({
     name: '易之',
-    version: '2.1.0',
+    version: '2.1.1',
     debug: false,
     storage: Object.freeze({
         backend: 'localStorage',
@@ -153,11 +153,20 @@ const StorageManager = {
         return false;
     },
 
+    /**
+     * 读取顺序：localStorage → 旧 sessionStorage（读到即迁移）→ 内存。
+     * localStorage 读取异常时仍尝试旧值；迁移写入失败时返回旧值且保留原数据，留待下次重试。
+     */
     getItem(key, defaultValue = null) {
         const fullKey = this._key(key);
         try {
             if (typeof localStorage !== 'undefined') {
-                const item = localStorage.getItem(fullKey);
+                let item = null;
+                try {
+                    item = localStorage.getItem(fullKey);
+                } catch (localReadError) {
+                    console.warn('本地存储读取失败，尝试旧会话存储：', localReadError);
+                }
                 if (item !== null) {
                     return JSON.parse(item);
                 }
@@ -168,8 +177,12 @@ const StorageManager = {
                 if (legacyItem !== null) {
                     const value = JSON.parse(legacyItem);
                     if (typeof localStorage !== 'undefined') {
-                        localStorage.setItem(fullKey, JSON.stringify(value));
-                        sessionStorage.removeItem(fullKey);
+                        try {
+                            localStorage.setItem(fullKey, JSON.stringify(value));
+                            sessionStorage.removeItem(fullKey);
+                        } catch (migrationError) {
+                            console.warn('旧存储迁移失败，暂用旧值：', migrationError);
+                        }
                     }
                     return value;
                 }
