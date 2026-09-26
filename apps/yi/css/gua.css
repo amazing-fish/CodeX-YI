@@ -1,0 +1,99 @@
+/*
+ * 卦画：纯 CSS 绘制，不依赖字体中的卦符字形
+ * 阳爻为一整画，阴爻中断；变爻以朱色标出，并附 ○（老阳）/ ×（老阴）以免只靠颜色区分
+ */
+.gua {
+    --yao-w: 56px;
+    --yao-h: 8px;
+    --yao-gap: 7px;
+    --yao-split: 16%;
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--yao-gap);
+    width: var(--yao-w);
+    flex: none;
+    vertical-align: middle;
+}
+
+.gua-xs { --yao-w: 18px; --yao-h: 2px; --yao-gap: 2px; --yao-split: 20%; }
+.gua-sm { --yao-w: 28px; --yao-h: 3px; --yao-gap: 3px; --yao-split: 18%; }
+.gua-md { --yao-w: 56px; --yao-h: 7px; --yao-gap: 6px; }
+.gua-lg { --yao-w: 104px; --yao-h: 12px; --yao-gap: 10px; }
+
+.yao {
+    position: relative;
+    display: block;
+    width: var(--yao-w, 100%);
+    height: var(--yao-h, 10px);
+    border-radius: 2px;
+    color: var(--ink);
+    background: currentColor;
+}
+
+.yao.is-yin {
+    background: linear-gradient(to right,
+        currentColor 0 calc(50% - var(--yao-split) / 2),
+        transparent calc(50% - var(--yao-split) / 2) calc(50% + var(--yao-split) / 2),
+        currentColor calc(50% + var(--yao-split) / 2) 100%);
+}
+
+.yao.is-empty {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    border-radius: 2px;
+}
+
+.gua-xs .yao.is-empty,
+.gua-sm .yao.is-empty {
+    box-shadow: none;
+    background: var(--line);
+}
+
+.yao.is-changing {
+    color: var(--cinnabar);
+}
+
+.yao.is-moved {
+    color: var(--jade);
+}
+
+.gua-md .yao.is-changing::after,
+.gua-lg .yao.is-changing::after {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 0.5em);
+    transform: translateY(-50%);
+    color: var(--cinnabar);
+    font-family: var(--font-sans);
+    font-size: max(12px, calc(var(--yao-h) * 1.5));
+    font-weight: 700;
+    line-height: 1;
+}
+
+.gua-md .yao.is-yang.is-changing::after,
+.gua-lg .yao.is-yang.is-changing::after {
+    content: "○";
+}
+
+.gua-md .yao.is-yin.is-changing::after,
+.gua-lg .yao.is-yin.is-changing::after {
+    content: "×";
+}
+
+.yao.is-active {
+    box-shadow: inset 0 0 0 1px var(--cinnabar);
+    animation: yao-wait 1.6s var(--ease) infinite;
+}
+
+.yao.is-new {
+    animation: yao-in var(--dur) var(--ease-out);
+    transform-origin: center;
+}
+
+@keyframes yao-wait {
+    50% { box-shadow: inset 0 0 0 1px var(--cinnabar), 0 0 0 4px var(--cinnabar-soft); }
+}
+
+@keyframes yao-in {
+    from { opacity: 0; transform: scaleX(0.4); }
+}

@@ -1,186 +1,96 @@
 /**
- * 知识模块 - 管理八卦知识展示
+ * 八卦 · 易传模块 - 八卦卡片、断卦规则与十翼通论
+ * 规则文本取自 YiCore.RULES，与起卦页“解读指引”同源
  */
 const KnowledgeModule = (function() {
-    // 私有变量
-    const baguaGrid = document.getElementById('baguaGrid');
-    const featuredHexagrams = document.getElementById('featuredHexagrams');
+    const grid = document.getElementById('trigramGrid');
+    const rulesList = document.getElementById('rulesList');
+    const wingsBody = document.getElementById('wingsBody');
 
-    // 精选卦象（用于展示）
-    const featuredHexagramIds = [1, 2, 11, 12, 63, 64]; // 乾、坤、泰、否、既济、未济
+    // 通论全经的传文；彖、象、文言随卦附于卦文
+    const WINGS = [
+        ['xici_shang', '系辞上'],
+        ['xici_xia', '系辞下'],
+        ['shuogua', '说卦'],
+        ['xugua', '序卦'],
+        ['zagua', '杂卦']
+    ];
 
-    // 初始化
+    // 先天八卦次序
+    const ORDER = ['乾', '兑', '离', '震', '巽', '坎', '艮', '坤'];
+    const PROPS = [
+        ['element', '五行'],
+        ['direction', '方位'],
+        ['family', '家人'],
+        ['animal', '取象']
+    ];
+
     function init() {
-        try {
-            initBaguaKnowledge();
-
-            // 监听卦象数据准备完成事件
-            YizhiApp.events.on('hexagram-data:ready', () => {
-                initFeaturedHexagrams();
-            });
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Knowledge Module Init');
-        }
+        renderRules();
+        YizhiApp.whenDataReady((data) => {
+            renderTrigrams(data);
+            renderWings(data);
+        });
     }
 
-    // 激活时的操作
-    function onActivate() {
-        // 可以添加激活时的特殊逻辑
-    }
-
-    // 初始化八卦知识
-    function initBaguaKnowledge() {
-        if (!baguaGrid) return;
-
-        try {
-            // 等待卦象数据准备就绪
-            const hexagramDataService = YizhiApp.getModule('hexagramData');
-            if (!hexagramDataService?.isInitialized) {
-                // 如果数据还没准备好，稍后再试
-                setTimeout(() => initBaguaKnowledge(), 100);
-                return;
-            }
-
-            const baguaData = hexagramDataService.getBaguaData();
-            const fragment = document.createDocumentFragment();
-
-            for (const [name, data] of Object.entries(baguaData)) {
-                const baguaCard = createBaguaCard(name, data);
-                fragment.appendChild(baguaCard);
-            }
-
-            baguaGrid.innerHTML = '';
-            baguaGrid.appendChild(fragment);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Init Bagua Knowledge');
-        }
-    }
-
-    // 创建八卦卡片
-    function createBaguaCard(name, data) {
-        const baguaCard = document.createElement('div');
-        baguaCard.className = 'bagua-card';
-
-        let propertiesHTML = '';
-        const propertyLabels = {
-            'nature': '本性',
-            'attribute': '特质',
-            'direction': '方位',
-            'animal': '动物',
-            'element': '五行',
-            'family': '家人'
-        };
-
-        for (const [key, value] of Object.entries(data)) {
-            if (key === 'symbol' || key === 'binary') continue;
-            const label = propertyLabels[key] || key;
-            propertiesHTML += `
-                <div class="bagua-property">
-                    <span class="property-label">${label}:</span>
-                    <span class="property-value">${value}</span>
-                </div>
-            `;
+    function renderWings(data) {
+        if (!wingsBody) return;
+        const esc = YizhiApp.utils.escapeHtml;
+        const classics = data.getClassics();
+        if (!classics) {
+            wingsBody.innerHTML = '<p class="wings-empty">经传原文未能载入，请检查网络后刷新页面。</p>';
+            return;
         }
 
-        baguaCard.innerHTML = `
-            <div class="bagua-content">
-                <div class="bagua-header">
-                    <div class="bagua-symbol">${data.symbol}</div>
-                    <div class="bagua-info">
-                        <div class="bagua-name">${name}</div>
-                        <div class="bagua-nature">${data.nature}</div>
+        const panels = WINGS.map(([key, name]) => {
+            const paragraphs = classics.appendix[key] || [];
+            return `
+                <details class="wing wing-panel">
+                    <summary><span>${name}</span><span class="wing-count">${paragraphs.length} 段</span></summary>
+                    <ol class="wing-text">${paragraphs.map(paragraph => `<li>${esc(paragraph)}</li>`).join('')}</ol>
+                </details>`;
+        });
+
+        wingsBody.innerHTML = `
+            ${panels.join('')}
+            <p class="wings-source">底本：${esc(classics.source)}</p>`;
+    }
+
+    function renderRules() {
+        if (!rulesList) return;
+        rulesList.innerHTML = YiCore.RULES.map(rule => `
+            <li><strong>${rule.name}</strong><span>${YizhiApp.utils.escapeHtml(rule.text)}</span></li>`).join('');
+    }
+
+    function renderTrigrams(data) {
+        if (!grid) return;
+        const { ui, utils } = YizhiApp;
+
+        grid.innerHTML = ORDER.map((name) => {
+            const bagua = data.getBagua(name);
+            if (!bagua) return '';
+            const bits = YiCore.binaryToBits(bagua.binary);
+            const props = PROPS
+                .filter(([key]) => bagua[key])
+                .map(([key, label]) => `<div><dt>${label}</dt><dd>${utils.escapeHtml(bagua[key])}</dd></div>`)
+                .join('');
+
+            return `
+                <article class="panel trigram-card" aria-labelledby="trigram-${name}">
+                    <div class="trigram-top">
+                        ${ui.figure(bits, { size: 'md', label: `${name}卦` })}
+                        <div>
+                            <h2 class="trigram-name" id="trigram-${name}">${name}</h2>
+                            <p class="trigram-nature">${utils.escapeHtml(bagua.nature)}</p>
+                        </div>
                     </div>
-                </div>
-                <div class="bagua-properties">
-                    ${propertiesHTML}
-                </div>
-            </div>
-        `;
-
-        // 添加点击事件
-        baguaCard.addEventListener('click', () => {
-            showBaguaDetails(name, data);
-        });
-
-        return baguaCard;
-    }
-
-    // 显示八卦详情
-    function showBaguaDetails(name, data) {
-        const modalContent = {
-            name: `${name}卦详解`,
-            unicode: data.symbol,
-            explanation: `${data.nature} - ${data.attribute}`,
-            overview: `${name}卦象征${data.nature}，具有${data.attribute}的特质。在八卦系统中，${name}卦代表${data.family}的位置，五行属${data.element}，方位在${data.direction}，对应的动物是${data.animal}。`,
-            detail: `
-                <div class="bagua-detailed">
-                    <h4>卦象结构</h4>
-                    <p>二进制：${data.binary}</p>
-                    <p>符号：${data.symbol}</p>
-                    
-                    <h4>象征意义</h4>
-                    <p>本性：${data.nature}</p>
-                    <p>特质：${data.attribute}</p>
-                    
-                    <h4>对应关系</h4>
-                    <p>方位：${data.direction}</p>
-                    <p>五行：${data.element}</p>
-                    <p>动物：${data.animal}</p>
-                    <p>家人：${data.family}</p>
-                </div>
-            `
-        };
-
-        YizhiApp.getModule('modal')?.show(modalContent);
-    }
-
-    // 初始化精选卦象
-    function initFeaturedHexagrams() {
-        if (!featuredHexagrams) return;
-
-        try {
-            const hexagramDataService = YizhiApp.getModule('hexagramData');
-            if (!hexagramDataService?.isInitialized) return;
-
-            const fragment = document.createDocumentFragment();
-
-            featuredHexagramIds.forEach(id => {
-                const hexagram = hexagramDataService.getHexagramById(id);
-                if (hexagram) {
-                    const featuredItem = createFeaturedItem(hexagram);
-                    fragment.appendChild(featuredItem);
-                }
-            });
-
-            featuredHexagrams.innerHTML = '';
-            featuredHexagrams.appendChild(fragment);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Init Featured Hexagrams');
-        }
-    }
-
-    // 创建精选卦象项
-    function createFeaturedItem(hexagram) {
-        const item = document.createElement('div');
-        item.className = 'featured-item';
-
-        item.innerHTML = `
-            <div class="featured-symbol">${hexagram.unicode || ''}</div>
-            <div class="featured-info">
-                <div class="featured-name">${hexagram.name}</div>
-                <div class="featured-explanation">${hexagram.explanation}</div>
-            </div>
-        `;
-
-        item.addEventListener('click', () => {
-            YizhiApp.getModule('modal')?.show(hexagram);
-        });
-
-        return item;
+                    <p class="trigram-attr">${utils.escapeHtml(bagua.attribute)}</p>
+                    <dl class="trigram-props">${props}</dl>
+                </article>`;
+        }).join('');
     }
 
     return {
-        init,
-        onActivate
+        init
     };
 })();

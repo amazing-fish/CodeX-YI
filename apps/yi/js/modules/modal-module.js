@@ -1,386 +1,128 @@
 /**
- * 模态框模块 - 管理卦象详情模态框
+ * 卦详情弹窗 - 基于原生 <dialog>（焦点圈定、Esc 关闭由浏览器提供）
+ * show(hexagram | hexagramId)
  */
 const ModalModule = (function() {
-    // 私有变量
-    const modal = document.getElementById('hexagramModal');
-    const modalBackdrop = document.getElementById('modalBackdrop');
-    const closeModal = document.getElementById('closeModal');
-    const modalSaveBtn = document.getElementById('modalSaveBtn');
-    const modalShareBtn = document.getElementById('modalShareBtn');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalContent = document.getElementById('modalContent');
+    const dialog = document.getElementById('hexagramDialog');
+    const figure = document.getElementById('hexagramDialogFigure');
+    const title = document.getElementById('hexagramDialogTitle');
+    const subtitle = document.getElementById('hexagramDialogSubtitle');
+    const body = document.getElementById('hexagramDialogBody');
+    const copyButton = document.getElementById('hexagramDialogCopy');
 
-    let currentHexagram = null;
-    let isVisible = false;
+    let current = null;
 
-    // 初始化
     function init() {
-        try {
-            bindEvents();
-            initKeyboardEvents();
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Modal Module Init');
-        }
-    }
+        copyButton?.addEventListener('click', copyCurrent);
 
-    // 绑定事件
-    function bindEvents() {
-        closeModal?.addEventListener('click', hide);
-        modalBackdrop?.addEventListener('click', hide);
-        modalSaveBtn?.addEventListener('click', saveCurrentHexagram);
-        modalShareBtn?.addEventListener('click', shareCurrentHexagram);
+        // 全局委托：任何带 data-open-hexagram 的元素都可打开对应卦
+        document.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-open-hexagram]');
+            if (!trigger) return;
+            event.preventDefault();
+            show(Number(trigger.getAttribute('data-open-hexagram')));
+        });
 
-        // 点击模态框内容区域不关闭
-        modal?.querySelector('.modal-content')?.addEventListener('click', (e) => {
-            e.stopPropagation();
+        dialog?.addEventListener('close', () => {
+            current = null;
         });
     }
 
-    // 初始化键盘事件
-    function initKeyboardEvents() {
-        document.addEventListener('keydown', (e) => {
-            if (!isVisible) return;
-
-            switch (e.key) {
-                case 'Escape':
-                    hide();
-                    break;
-                case 's':
-                case 'S':
-                    if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        saveCurrentHexagram();
-                    }
-                    break;
-                default:
-                    break;
-            }
-        });
+    function resolve(input) {
+        const data = YizhiApp.getModule('hexagramData');
+        if (typeof input === 'number') {
+            return data?.getHexagramById(input) || null;
+        }
+        if (input && input.id && data?.isInitialized) {
+            return data.getHexagramById(input.id) || input;
+        }
+        return input || null;
     }
 
-    // 显示模态框
-    function show(hexagram) {
-        if (!hexagram || !modal) {
-            console.warn('Modal: Invalid hexagram or modal element not found');
-            return;
-        }
+    function show(input) {
+        const hexagram = resolve(input);
+        if (!hexagram || !dialog) return;
 
-        try {
-            currentHexagram = hexagram;
-
-            // 显示加载状态
-            showLoading();
-
-            // 显示模态框
-            modal.style.display = 'flex';
-            isVisible = true;
-
-            // 设置标题
-            const title = `${hexagram.name || '未知卦象'} · ${hexagram.explanation || ''}`;
-            if (modalTitle) {
-                modalTitle.textContent = title;
-            }
-
-            // 异步加载内容
-            setTimeout(() => {
-                loadModalContent(hexagram);
-            }, 100);
-
-            // 焦点管理
-            closeModal?.focus();
-
-            // 禁用背景滚动
-            document.body.style.overflow = 'hidden';
-
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Show Modal');
-        }
+        current = hexagram;
+        render(hexagram);
+        YizhiApp.dialogs.open(dialog);
+        body.scrollTop = 0;
     }
 
-    // 隐藏模态框
+    function render(hexagram) {
+        const { ui, utils } = YizhiApp;
+        const data = YizhiApp.getModule('hexagramData');
+        const upper = data?.getBagua(hexagram.upperTrigram);
+        const lower = data?.getBagua(hexagram.lowerTrigram);
+
+        figure.innerHTML = hexagram.binary ? ui.figureFromBinary(hexagram.binary, { size: 'md' }) : '';
+        title.textContent = hexagram.name;
+        subtitle.textContent = [
+            hexagram.id ? `第 ${hexagram.id} 卦` : '',
+            hexagram.fullName || '',
+            hexagram.explanation || ''
+        ].filter(Boolean).join(' · ');
+
+        const trigrams = upper && lower
+            ? `<p class="sheet-trigrams">上${utils.escapeHtml(hexagram.upperTrigram)}（${utils.escapeHtml(upper.nature)}）· 下${utils.escapeHtml(hexagram.lowerTrigram)}（${utils.escapeHtml(lower.nature)}）</p>`
+            : '';
+        const relations = ui.relationChips(hexagram);
+        const classic = ui.classicBlock(hexagram);
+        const wings = ui.wingsBlock(hexagram);
+        // 占记快照只有卦名与卦义，没有卦画与爻辞时不渲染对应段落
+        const hasLines = hexagram.bits?.length === 6 && hexagram.lines?.length;
+
+        body.innerHTML = `
+            ${trigrams}
+            ${classic}
+            <h3 class="section-label">白话</h3>
+            <p class="study-overview">${utils.escapeHtml(hexagram.overview || '')}</p>
+            ${hexagram.detail ? `<p class="sheet-detail">${utils.escapeHtml(hexagram.detail)}</p>` : ''}
+            ${hasLines ? `<h3 class="section-label">六爻</h3>${ui.positionSummary(hexagram.bits)}${ui.lineList(hexagram)}` : ''}
+            ${wings ? `<h3 class="section-label">传</h3>${wings}` : ''}
+            ${relations ? `<h3 class="section-label">错 · 综 · 互</h3>${relations}` : ''}
+        `;
+    }
+
+    function textOf(hexagram) {
+        const classic = hexagram.classic;
+        const lineText = line => [
+            `${line.title}，${line.text}`,
+            line.xiang ? `　象曰：${line.xiang}` : ''
+        ].filter(Boolean).join('\n');
+        const lines = [...(hexagram.lines || []), ...(classic?.extra ? [classic.extra] : [])].map(lineText);
+
+        return [
+            `${hexagram.fullName || hexagram.name}（第 ${hexagram.id} 卦）· ${hexagram.explanation || ''}`,
+            '',
+            ...(classic ? [
+                classic.judgment,
+                classic.tuan ? `彖曰：${classic.tuan}` : '',
+                classic.daxiang ? `象曰：${classic.daxiang}` : '',
+                ''
+            ].filter((line, index, list) => line || index === list.length - 1) : []),
+            ...lines,
+            '',
+            hexagram.overview || '',
+            '',
+            '—— 易之'
+        ].join('\n');
+    }
+
+    async function copyCurrent() {
+        if (!current) return;
+        const copied = await YizhiApp.utils.copyText(textOf(current));
+        YizhiApp.toast(copied ? 'success' : 'error', copied ? `已复制「${current.name}」卦文` : '复制失败，请手动选择文本');
+    }
+
     function hide() {
-        if (!modal || !isVisible) return;
-
-        try {
-            modal.style.display = 'none';
-            isVisible = false;
-            currentHexagram = null;
-
-            // 恢复背景滚动
-            document.body.style.overflow = '';
-
-            // 清空内容
-            if (modalContent) {
-                modalContent.innerHTML = '';
-            }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Hide Modal');
-        }
-    }
-
-    // 显示加载状态
-    function showLoading() {
-        if (!modalContent) return;
-
-        modalContent.innerHTML = `
-            <div class="modal-loading">
-                <div class="loading-spinner">
-                    <div class="taiji-spinner"></div>
-                </div>
-                <p>加载卦象信息中...</p>
-            </div>
-        `;
-    }
-
-    // 加载模态框内容
-    function loadModalContent(hexagram) {
-        if (!modalContent) return;
-
-        try {
-            // 处理爻辞
-            let linesHTML = '';
-            if (hexagram.lines && hexagram.lines.length > 0) {
-                hexagram.lines.forEach(line => {
-                    const position = line.position || 0;
-                    const content = line.content || '暂无爻辞';
-
-                    linesHTML += `
-                        <div class="modal-line-reading">
-                            <div class="modal-line-position">第${position}爻</div>
-                            <p class="modal-line-content">${content}</p>
-                        </div>
-                    `;
-                });
-            } else {
-                linesHTML = '<p class="modal-no-data">暂无爻辞数据</p>';
-            }
-
-            // 获取上下卦信息
-            let trigramInfo = '';
-            if (hexagram.upperTrigram && hexagram.lowerTrigram) {
-                const hexagramDataService = YizhiApp.getModule('hexagramData');
-                if (hexagramDataService?.isInitialized) {
-                    const upperBagua = hexagramDataService.getBagua(hexagram.upperTrigram);
-                    const lowerBagua = hexagramDataService.getBagua(hexagram.lowerTrigram);
-
-                    if (upperBagua && lowerBagua) {
-                        trigramInfo = `
-                            <div class="modal-trigram-info">
-                                <div class="trigram-item">
-                                    <span class="trigram-symbol">${upperBagua.symbol}</span>
-                                    <span class="trigram-name">上卦: ${hexagram.upperTrigram}</span>
-                                    <span class="trigram-nature">${upperBagua.nature}</span>
-                                </div>
-                                <div class="trigram-item">
-                                    <span class="trigram-symbol">${lowerBagua.symbol}</span>
-                                    <span class="trigram-name">下卦: ${hexagram.lowerTrigram}</span>
-                                    <span class="trigram-nature">${lowerBagua.nature}</span>
-                                </div>
-                            </div>
-                        `;
-                    }
-                }
-            }
-
-            // 获取相关卦象
-            let relationsHTML = '';
-            if (hexagram.id && YizhiApp.getModule('hexagramData')?.isInitialized) {
-                const related = YizhiApp.getModule('hexagramData').getRelatedHexagrams(hexagram.id);
-
-                if (Object.keys(related).length > 0) {
-                    const relationTypes = {
-                        opposite: '对宫卦',
-                        inverse: '综卦',
-                        mutual: '互卦'
-                    };
-
-                    relationsHTML = '<div class="modal-relations"><h4 class="modal-section-title">相关卦象</h4><div class="modal-relation-items">';
-
-                    for (const [type, relHexagram] of Object.entries(related)) {
-                        if (!relHexagram) continue;
-
-                        relationsHTML += `
-                            <div class="modal-relation-item" data-hexagram-id="${relHexagram.id}">
-                                <div class="relation-symbol">${relHexagram.unicode || ''}</div>
-                                <div class="relation-info">
-                                    <div class="relation-name">${relHexagram.name || '未知卦象'}</div>
-                                    <div class="relation-type">${relationTypes[type] || type}</div>
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    relationsHTML += '</div></div>';
-                }
-            }
-
-            // 构建完整内容
-            modalContent.innerHTML = `
-                <div class="modal-hexagram-header">
-                    <div class="modal-hexagram-unicode">${hexagram.unicode || ''}</div>
-                    <div class="modal-hexagram-info">
-                        <h2 class="modal-hexagram-name">${hexagram.name || '未知卦象'}</h2>
-                        <p class="modal-hexagram-explanation">${hexagram.explanation || ''}</p>
-                    </div>
-                </div>
-
-                ${trigramInfo}
-
-                <div class="modal-section">
-                    <h3 class="modal-section-title">卦象概述</h3>
-                    <p class="modal-section-content">${hexagram.overview || '暂无数据'}</p>
-                </div>
-
-                <div class="modal-section">
-                    <h3 class="modal-section-title">详细解析</h3>
-                    <p class="modal-section-content">${hexagram.detail || '暂无数据'}</p>
-                </div>
-
-                <div class="modal-section">
-                    <h3 class="modal-section-title">爻辞解读</h3>
-                    <div class="modal-lines-content">
-                        ${linesHTML}
-                    </div>
-                </div>
-
-                ${relationsHTML}
-            `;
-
-            // 绑定相关卦象点击事件
-            bindRelationEvents();
-
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Load Modal Content');
-            showErrorContent();
-        }
-    }
-
-    // 绑定相关卦象事件
-    function bindRelationEvents() {
-        const relationItems = modalContent?.querySelectorAll('.modal-relation-item');
-        relationItems?.forEach(item => {
-            item.addEventListener('click', () => {
-                const hexagramId = parseInt(item.getAttribute('data-hexagram-id'));
-                if (hexagramId) {
-                    const hexagramDataService = YizhiApp.getModule('hexagramData');
-                    const relatedHexagram = hexagramDataService?.getHexagramById(hexagramId);
-                    if (relatedHexagram) {
-                        show(relatedHexagram);
-                    }
-                }
-            });
-        });
-    }
-
-    // 显示错误内容
-    function showErrorContent() {
-        if (!modalContent) return;
-
-        modalContent.innerHTML = `
-            <div class="modal-error">
-                <svg class="error-icon" viewBox="0 0 24 24">
-                    <path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"></path>
-                </svg>
-                <h3>加载失败</h3>
-                <p>无法加载卦象信息，请稍后重试</p>
-                <button class="btn btn-primary btn-sm" onclick="location.reload()">刷新页面</button>
-            </div>
-        `;
-    }
-
-    // 保存当前卦象
-    function saveCurrentHexagram() {
-        if (!currentHexagram) return;
-
-        try {
-            // 创建历史记录项
-            const historyItem = {
-                id: YizhiApp.utils.generateId(),
-                date: YizhiApp.utils.formatDate(new Date()),
-                hexagram: currentHexagram,
-                lines: [], // 模态框中的卦象可能没有具体的爻线信息
-                notes: '通过查询保存',
-                source: 'modal'
-            };
-
-            YizhiApp.getModule('history')?.addRecord(historyItem);
-            YizhiApp.getModule('notification')?.show('success', '保存成功',
-                `卦象「${currentHexagram.name}」已保存到历史记录。`);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Save Current Hexagram');
-        }
-    }
-
-    // 分享当前卦象
-    function shareCurrentHexagram() {
-        if (!currentHexagram) return;
-
-        try {
-            const shareText = `${currentHexagram.name} - ${currentHexagram.explanation}\n\n${currentHexagram.overview || ''}`;
-
-            if (navigator.share) {
-                // 使用原生分享API
-                navigator.share({
-                    title: `易之 - ${currentHexagram.name}`,
-                    text: shareText,
-                    url: window.location.href
-                }).then(() => {
-                    YizhiApp.getModule('notification')?.show('success', '分享成功', '卦象信息已分享。');
-                }).catch((error) => {
-                    if (error.name !== 'AbortError') {
-                        fallbackShare(shareText);
-                    }
-                });
-            } else {
-                // 回退到复制到剪贴板
-                fallbackShare(shareText);
-            }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Share Current Hexagram');
-        }
-    }
-
-    // 回退分享方法
-    function fallbackShare(text) {
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(() => {
-                YizhiApp.getModule('notification')?.show('success', '复制成功', '卦象信息已复制到剪贴板。');
-            }).catch(() => {
-                showShareModal(text);
-            });
-        } else {
-            showShareModal(text);
-        }
-    }
-
-    // 显示分享模态框
-    function showShareModal(text) {
-        const shareModal = document.createElement('div');
-        shareModal.className = 'share-modal';
-        shareModal.innerHTML = `
-            <div class="share-content">
-                <h4>分享卦象</h4>
-                <textarea readonly class="share-text">${text}</textarea>
-                <div class="share-actions">
-                    <button class="btn btn-outline btn-sm" onclick="this.closest('.share-modal').remove()">关闭</button>
-                    <button class="btn btn-primary btn-sm" onclick="this.parentElement.previousElementSibling.select();document.execCommand('copy');this.textContent='已复制';setTimeout(()=>this.textContent='复制文本',1000)">复制文本</button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(shareModal);
-
-        setTimeout(() => {
-            shareModal.remove();
-        }, 10000);
+        if (dialog?.open) dialog.close();
     }
 
     return {
         init,
         show,
         hide,
-        get isVisible() { return isVisible; },
-        get currentHexagram() { return currentHexagram; }
+        get isVisible() { return Boolean(dialog?.open); }
     };
 })();

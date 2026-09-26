@@ -1,0 +1,8 @@
+#!/bin/sh
+
+commit_msg_file="$1"
+
+if ! grep -q '[一-龥]' "$commit_msg_file"; then
+  echo "提交信息必须包含中文。"
+  exit 1
+fi
