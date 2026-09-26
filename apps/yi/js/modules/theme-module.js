@@ -12,6 +12,10 @@ const ThemeModule = (function() {
     const STORAGE_KEY = 'theme';
     const REVEAL_DURATION = 560;
     const SPIN_LEAD = 260;
+    const SWITCHING_CLASS = 'theme-switching';
+    // 与 css/tokens.css 中两套主题的 --paper 一致（由 static-ui 契约校验）。
+    // 切换后若用 getComputedStyle 读取，会强制整页同步重算样式，是切换卡顿的主因
+    const THEME_COLORS = Object.freeze({ light: '#f6f1e7', dark: '#16140f' });
 
     let turns = 0;
     let pendingTheme = null;
@@ -33,7 +37,7 @@ const ThemeModule = (function() {
         media?.addEventListener?.('change', (event) => {
             const userTheme = YizhiApp.storage.getItem(STORAGE_KEY);
             if (userTheme !== 'dark' && userTheme !== 'light') {
-                apply(event.matches ? 'dark' : 'light');
+                withTransitionsPaused(() => apply(event.matches ? 'dark' : 'light'));
             }
         });
     }
@@ -44,9 +48,21 @@ const ThemeModule = (function() {
             toggle.setAttribute('aria-pressed', String(theme === 'dark'));
             toggle.setAttribute('title', theme === 'dark' ? '切换为浅色' : '切换为深色');
         }
-        if (themeColorMeta) {
-            themeColorMeta.setAttribute('content', getComputedStyle(root).getPropertyValue('--paper').trim() || '#f6f1e7');
-        }
+        themeColorMeta?.setAttribute('content', THEME_COLORS[theme]);
+    }
+
+    /**
+     * 切换期间暂停全站颜色过渡：否则每个带 transition 的元素都会各自补间一遍新旧颜色，
+     * 既多出逐帧样式计算，又会让视图过渡拍到半途的颜色。两帧后（新主题已绘制）恢复
+     */
+    let switchingFrame = 0;
+    function withTransitionsPaused(update) {
+        cancelAnimationFrame(switchingFrame);
+        root.classList.add(SWITCHING_CLASS);
+        update();
+        switchingFrame = requestAnimationFrame(() => {
+            switchingFrame = requestAnimationFrame(() => root.classList.remove(SWITCHING_CLASS));
+        });
     }
 
     function spin() {
@@ -87,7 +103,7 @@ const ThemeModule = (function() {
 
         const commit = () => {
             pendingTimer = null;
-            apply(theme);
+            withTransitionsPaused(() => apply(theme));
             YizhiApp.events.emit('theme:changed', { theme });
         };
 
