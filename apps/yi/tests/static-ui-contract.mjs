@@ -172,6 +172,27 @@ function testStaticOwnershipAndStartupContracts() {
   }
 }
 
+function testThemeSwitchContract() {
+  const themeSource = read('js/modules/theme-module.js');
+  const tokens = read('css/tokens.css');
+  const paperOf = (selector) => {
+    const start = tokens.indexOf(`${selector} {`);
+    assert.ok(start >= 0, `tokens.css 应定义 ${selector}`);
+    const block = tokens.slice(start, tokens.indexOf('}', start));
+    return block.match(/--paper:\s*(#[0-9a-f]{6});/i)?.[1].toLowerCase();
+  };
+  const colors = themeSource.match(/THEME_COLORS = Object\.freeze\(\{ light: '(#[0-9a-f]{6})', dark: '(#[0-9a-f]{6})' \}\)/i);
+
+  assert.ok(colors, 'ThemeModule 应以常量声明两套主题的地址栏颜色');
+  assert.equal(colors[1].toLowerCase(), paperOf(':root'), '浅色 theme-color 应与 :root 的 --paper 一致');
+  assert.equal(colors[2].toLowerCase(), paperOf('[data-theme="dark"]'), '深色 theme-color 应与深色主题的 --paper 一致');
+  assert.match(read('index.html'), new RegExp(`<meta name="theme-color" content="${colors[1]}">`, 'i'),
+    '首屏 theme-color 应与浅色 --paper 一致');
+  assert.doesNotMatch(themeSource, /getComputedStyle\(/,'切换主题时不得读取计算样式（会强制整页同步重算）');
+  assert.match(read('css/taiji.css'), /\.theme-switching \*:not\(\.taiji\)[^{]*\{\s*transition: none !important;/,
+    '切换期间应暂停颜色过渡，且保留太极旋转');
+}
+
 async function testSearchContract() {
   const document = createDocument();
   const errors = [];
@@ -290,6 +311,7 @@ async function testPendingThrowIsCancelled() {
 }
 
 testStaticOwnershipAndStartupContracts();
+testThemeSwitchContract();
 await testSearchContract();
 testDialogPreservesOriginalOpener();
 await testPendingThrowIsCancelled();

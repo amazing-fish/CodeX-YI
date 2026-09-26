@@ -40,7 +40,7 @@
   - 经传来源与生成：王弼《周易注》底本（易學網校对，gist sui1491/52e8214c…），经 OpenCC 词典繁转简；“乾”不转“干”，罕用字（CJK 扩展 A 及 BMP 外）保留繁体以免缺字；坎上六“黴纆”据通行本改“徽纆”并记入 `notes`。已与 LarryZhu-dev/thebookofchanges 逐字比对，差异均为版本异文（如革“已日/己日”）或对方讹误（如蒙“初筮/初噬”）
   - 爻位：`linePositions(bits)` 给出当位（阳居奇、阴居偶）、居中（二、五）、相应（初四、二五、三上一阴一阳）；`positionSummary` 统计并点出“六爻皆当位（既济）/皆失位（未济）/三组皆应/上下无应” `apps/yi/js/core/yijing-core.js:175`、`195`；成卦台每爻显示当位/失位，卦文每爻显示 `UI.positionTags` `apps/yi/js/app.js:352`
   - 卦画渲染：`YizhiApp.ui.figure` 以 CSS 绘制（不依赖 U+4DC0 字形），变爻附 ○/× 标记而非只靠颜色 `apps/yi/js/app.js:305`、`apps/yi/css/gua.css`
-  - 太极动效：同一 SVG（`UI.taiji`，`apps/yi/js/app.js:337`；阳=纸色、阴=墨色随主题互换）用于：主题切换（每次累计转半周，先转后以 View Transitions 自按钮圆形晕开新主题 `apps/yi/js/modules/theme-module.js:52`、`58`）、启动画面（400ms 后才显现，数据就绪淡出 `apps/yi/js/app.js:540`）、载入态 `UI.spinner`、成卦台中轴（每成一爻转 60°、与铜钱翻落同步，六爻成卦满一周并亮一圈朱晕 `apps/yi/js/modules/divination-module.js:220`、`230`）；减少动态效果时全部静止
+  - 太极动效：同一 SVG（`UI.taiji`，`apps/yi/js/app.js:337`；阳=纸色、阴=墨色随主题互换）用于：主题切换（每次累计转半周，先转后以 View Transitions 自按钮圆形晕开新主题 `apps/yi/js/modules/theme-module.js:74`、`99`；切换期间两帧内暂停颜色过渡 `59`，地址栏色取常量不读计算样式 `18`）、启动画面（400ms 后才显现，数据就绪淡出 `apps/yi/js/app.js:540`）、载入态 `UI.spinner`、成卦台中轴（每成一爻转 60°、与铜钱翻落同步，六爻成卦满一周并亮一圈朱晕 `apps/yi/js/modules/divination-module.js:220`、`230`）；减少动态效果时全部静止
   - 数据 IO：三份数据同一加载/回退策略 `apps/yi/js/services/hexagram-data-service-module.js:56`，经传加载失败只告警、退回白话数据；排序搜索（卦名>卦序>卦义>卦辞>爻辞>彖/大象>小象>概述>白话>文言>详解）`365`，高亮前先转义并转义正则元字符 `apps/yi/js/app.js:483`；错综互 `426`
   - 数据就绪：模块统一用 `YizhiApp.whenDataReady` 等待 `hexagram-data:ready`，失败时发出 `hexagram-data:error` 并各自显示错误态 `apps/yi/js/app.js:576`
   - 存储边界：优先 `localStorage`，兼容迁移旧 `sessionStorage`，不可用时转内存 Map `apps/yi/js/app.js:135`；`localStorage` 读取异常仍尝试旧值，迁移写入失败时返回旧值并保留原数据待下次重试；键：`yizhi_theme`、`yizhi_divination_history`、`yizhi_library_layout`
@@ -73,6 +73,7 @@
 
 ## 最近14个版本变更日志
 
+- v2.1.2（bugfix）：主题切换去掉强制同步样式重算（地址栏色改取常量），切换两帧内暂停全站颜色过渡；4 倍降速下长任务总时长约减 56%，并以契约固定地址栏色与 `--paper` 一致
 - v2.1.1（bugfix/merge）：合并 main 的 v1.2.0–v1.7.5 修复并移植到 v2 结构：数据失败关闭校验与原子提交、占记 v1 编解码与 canonical 水合、持久化文本只经 textContent、存储迁移容错、重置/载入占记取消进行中的投掷；契约测试改写为 v2 并纳入统一验证入口
 - v2.1.0（feature）：补入经传原文（卦辞、爻辞、彖、大象、小象、文言、用九用六，及系辞上下、说卦、序卦、杂卦）；恢复并升级太极动效（主题切换半周旋转 + 墨晕揭示、启动画面、载入态、成卦台中轴）；外显爻位（当位/失位、居中、相应）
 - v2.0.0（refactor）：以“成卦即得所读之辞”为核心重构信息架构、交互与视觉；新增易理核心纯函数与单测、卦典方图、占记重读/撤销/导入；样式拆分为 7 个文件，代码量约减少 45%
@@ -86,7 +87,6 @@
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 - v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
-- v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -102,6 +102,27 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.1.2
+
+- 变更版本：v2.1.2（bugfix）
+- 改动概述：主题切换卡顿。trace 定位两个主因：一是 `apply()` 设完 `data-theme` 后立即用 `getComputedStyle` 读 `--paper` 写地址栏色，强制整页同步重算样式（4 倍降速下单次约 116ms）；二是约 92 个带颜色过渡的元素各自补间新旧颜色，逐帧重算，且视图过渡会拍到半途的颜色。
+- 影响模块：主题切换（手动切换与跟随系统）
+- 变更文件与补丁摘要：
+  - `theme-module.js`：地址栏色改取常量 `THEME_COLORS`（与 `tokens.css` 两套 `--paper` 一致）；新增 `withTransitionsPaused`：挂 `.theme-switching` 后切换，两帧后移除；手动切换与系统主题变化均经此路径
+  - `taiji.css`：`.theme-switching` 下除太极外的元素及伪元素 `transition: none`，按钮太极的半周旋转保留
+  - `static-ui-contract.mjs`：新增主题切换契约——常量与 `:root`/深色 `--paper`、首屏 `<meta name="theme-color">` 一致；模块内不得调用 `getComputedStyle(`；暂停规则存在且排除 `.taiji`
+  - `app.js`：版本号 2.1.2；最旧的 v1.5.3 变更日志转入 `CHANGELOG-ARCHIVE.md`
+- 验证步骤与结果：
+  - `node .\apps\yi\tests\validate-project.mjs`：通过；`git diff --check`：通过
+  - 回归校验：临时改回 `getComputedStyle` 读色、或把深色 `--paper` 改一位，`static-ui-contract.mjs` 分别失败，恢复后通过
+  - 性能（Chrome DevTools trace，1440×900，卦典方图页，4 倍 CPU 降速，连续切换 4 次）：长任务 17 个共 1583ms → 9 个共 701ms（约 −56%）；脚本 320→20ms、绘制 474→153ms、样式 662→424ms；ForcedReflow 洞察消失
+  - 对照：禁用 View Transitions 时长任务共 152ms，余下开销主要是视图过渡捕获快照的合成器 Commit（4 倍降速下每次约 50–90ms，常速约 15–20ms）；去掉顶栏 `backdrop-filter` 后 Commit 无明显变化，故保留圆形晕开效果
+  - 浏览器（常速）：切换后 `data-theme`、`aria-pressed`、存储值与 `meta[name="theme-color"]` 一致；`.theme-switching` 约 300ms 内移除；连点三次以最后一次为准；清除存储后模拟系统深色，页面跟随切换并经过暂停路径；控制台 0 条消息
+- 默认值与安全边界：动画参数不变（`SPIN_LEAD` 260ms、`REVEAL_DURATION` 560ms）；暂停类只存在两帧，后台标签页中 rAF 暂停时会延后到页面可见后移除，不影响功能
+- 风险与后续事项：
+  - 修改 `tokens.css` 的 `--paper` 时须同步 `THEME_COLORS` 与首屏 meta，契约会拦截不一致
+  - 点击到画面开始变化仍有 260ms 的旋转前导（设计取舍，非性能问题）；如需更跟手可再缩短
 
 ## 审计记录：v2.1.1
 

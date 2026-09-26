@@ -178,6 +178,13 @@
     100% { filter: drop-shadow(0 0 0 transparent); }
 }
 
+/* 切换主题的两帧内暂停颜色过渡（ThemeModule 挂载 .theme-switching）；太极自身的旋转过渡保留 */
+.theme-switching *:not(.taiji),
+.theme-switching *::before,
+.theme-switching *::after {
+    transition: none !important;
+}
+
 /* 深浅主题切换：新主题自按钮处圆形晕开（由 ThemeModule 驱动 clip-path） */
 ::view-transition-old(root),
 ::view-transition-new(root) {

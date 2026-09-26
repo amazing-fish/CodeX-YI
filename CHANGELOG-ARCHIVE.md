@@ -2,6 +2,7 @@
 
 超出 `ANCHOR.md`“最近14个版本变更日志”的历史条目归档于此；对应审计记录仍保留在 `ANCHOR.md`。
 
+- v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
 - v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
 - v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
 - v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
