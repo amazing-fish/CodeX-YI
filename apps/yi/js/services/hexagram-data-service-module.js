@@ -1,347 +1,336 @@
 /**
- * 卦象数据服务 - 管理易经卦象数据
+ * 卦象数据服务 - 加载、索引与查询六十四卦、八卦与经传原文
+ *
+ * 三份数据同一套加载策略：http(s) 下 fetch JSON，失败或 file:// 下回退到同名 .js 预加载脚本。
+ * - hexagrams：卦名、卦画与白话释义（必需）
+ * - bagua：八卦属性（必需）
+ * - zhouyi：经传原文——卦辞、爻辞、彖、象、文言、序卦、杂卦及系辞、说卦（可选；缺失时退回白话数据中的爻辞）
  */
 const HexagramDataService = (function() {
 
-    const DATA_URL = 'data/hexagrams.json';
-    const BAGUA_DATA_URL = 'data/bagua.json';
-    const REQUIRED_BAGUA_BINARIES = Object.freeze({
-        乾: '111',
-        坤: '000',
-        震: '001',
-        巽: '110',
-        坎: '010',
-        离: '101',
-        艮: '100',
-        兑: '011'
+    const DATASETS = Object.freeze({
+        hexagrams: { url: 'data/hexagrams.json', preload: 'data/hexagrams.js', global: '__HEXAGRAM_DATA__', label: '卦象' },
+        bagua: { url: 'data/bagua.json', preload: 'data/bagua.js', global: '__BAGUA_DATA__', label: '八卦' },
+        zhouyi: { url: 'data/zhouyi.json', preload: 'data/zhouyi.js', global: '__ZHOUYI_DATA__', label: '经传' }
     });
-    const REQUIRED_BAGUA_TEXT_FIELDS = Object.freeze([
-        'symbol',
-        'nature',
-        'attribute',
-        'direction',
-        'animal',
-        'element',
-        'family'
-    ]);
 
-    let rawHexagramData = null;
+    // 八卦键名与卦画是卦象索引的根，任何偏离都视为数据损坏
+    const REQUIRED_BAGUA_BINARIES = Object.freeze({
+        乾: '111', 坤: '000', 震: '001', 巽: '110', 坎: '010', 离: '101', 艮: '100', 兑: '011'
+    });
+    const REQUIRED_BAGUA_TEXT_FIELDS = Object.freeze(['symbol', 'nature', 'attribute', 'direction', 'animal', 'element', 'family']);
+
+    const cache = {};
+    const preloadPromises = {};
+
     let hexagramMap = {};
     let baguaData = null;
+    let classics = null;
+    let hexagramIdByBinary = null;
+    let baguaNameByBinary = null;
+    let hexagramByTrigramKey = null;
     let isInitialized = false;
 
-    // 初始化
     async function init() {
         try {
             if (isInitialized) return;
 
-            YizhiApp.performance.start('hexagram_data_init');
-
-            // 处理卦象数据
             await processHexagramData();
-
             isInitialized = true;
-            YizhiApp.performance.end('hexagram_data_init');
-
             YizhiApp.events.emit('hexagram-data:ready');
         } catch (error) {
-            YizhiApp.errors.handle(error, 'Hexagram Data Service Init');
+            YizhiApp.events.emit('hexagram-data:error', { error });
+            YizhiApp.errors.handle(error, '加载卦象数据', '卦象数据加载失败，请检查网络后刷新页面。');
         }
     }
 
-    // 加载卦象数据
-    async function loadHexagramData() {
-        if (rawHexagramData) {
-            return rawHexagramData;
-        }
+    function isLocalFileProtocol() {
+        return typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
+    }
 
-        if (typeof fetch === 'function') {
-            let response;
-            try {
-                response = await fetch(DATA_URL, { cache: 'default' });
-                if (!response.ok) {
-                    throw new Error(`Failed to load hexagram data: ${response.status}`);
-                }
-            } catch (error) {
-                const fallbackData = getPreloadedHexagramData();
-                if (fallbackData) {
-                    console.warn('加载远程卦象数据失败，使用预加载数据回退。', error);
-                    return fallbackData;
-                }
-                YizhiApp.errors.handle(error, 'Load Hexagram Data');
-                throw error;
-            }
+    function getPreloaded(key) {
+        const global = DATASETS[key].global;
+        return typeof window !== 'undefined' && window[global] ? window[global] : null;
+    }
 
-            return response.json();
-        }
+    async function loadDataset(key) {
+        if (cache[key]) return cache[key];
+        const dataset = DATASETS[key];
 
-        const fallback = getPreloadedHexagramData();
-        if (fallback) {
+        if (isLocalFileProtocol() || typeof fetch !== 'function') {
+            const fallback = await ensurePreloaded(key);
+            if (!fallback) throw new Error(`${dataset.label}数据不可用`);
+            cache[key] = fallback;
             return fallback;
         }
 
-        const loadError = new Error('Hexagram data is not available.');
-        YizhiApp.errors.handle(loadError, 'Load Hexagram Data');
-        throw loadError;
+        try {
+            const response = await fetch(dataset.url, { cache: 'default' });
+            if (!response.ok) {
+                throw new Error(`加载${dataset.label}数据失败：${response.status}`);
+            }
+            cache[key] = await response.json();
+            return cache[key];
+        } catch (error) {
+            const fallback = await ensurePreloaded(key);
+            if (fallback) {
+                console.warn(`加载远程${dataset.label}数据失败，使用预加载数据回退。`, error);
+                cache[key] = fallback;
+                return fallback;
+            }
+            throw error;
+        }
     }
 
-    function getPreloadedHexagramData() {
-        if (typeof window !== 'undefined' && window.__HEXAGRAM_DATA__) {
-            return window.__HEXAGRAM_DATA__;
-        }
-        return null;
-    }
+    async function ensurePreloaded(key) {
+        const existing = getPreloaded(key);
+        if (existing || typeof document === 'undefined') return existing;
 
-    async function loadBaguaData() {
-        if (baguaData) {
-            return baguaData;
-        }
-
-        if (typeof fetch === 'function') {
-            let response;
-            try {
-                response = await fetch(BAGUA_DATA_URL, { cache: 'default' });
-                if (!response.ok) {
-                    throw new Error('Failed to load bagua data: ' + response.status);
-                }
-            } catch (error) {
-                const fallbackData = getPreloadedBaguaData();
-                if (fallbackData) {
-                    console.warn('加载远程八卦数据失败，使用预加载数据回退。', error);
-                    return fallbackData;
-                }
-                YizhiApp.errors.handle(error, 'Load Bagua Data');
+        if (!preloadPromises[key]) {
+            preloadPromises[key] = loadPreloadScript(DATASETS[key].preload, `${key} preload`).catch((error) => {
+                preloadPromises[key] = null;
                 throw error;
-            }
-
-            return response.json();
-        }
-
-        const fallback = getPreloadedBaguaData();
-        if (fallback) {
-            return fallback;
-        }
-
-        const loadError = new Error('Bagua data is not available.');
-        YizhiApp.errors.handle(loadError, 'Load Bagua Data');
-        throw loadError;
-    }
-
-    function getPreloadedBaguaData() {
-        if (typeof window !== 'undefined' && window.__BAGUA_DATA__) {
-            return window.__BAGUA_DATA__;
-        }
-        return null;
-    }
-
-    // 处理卦象数据
-    async function processHexagramData() {
-        const nextBaguaData = validateBaguaData(await loadBaguaData());
-        const sourceHexagrams = await loadHexagramData();
-        const nextHexagramMap = validateHexagramData(sourceHexagrams);
-        const binaryIndex = new Map();
-
-        for (const key in nextHexagramMap) {
-            const id = parseInt(key, 10);
-            const hexagram = nextHexagramMap[key];
-            hexagram.id = id;
-            binaryIndex.set(hexagram.binary, id);
-
-            calculateTrigrams(hexagram, nextBaguaData);
-        }
-
-        for (const key in nextHexagramMap) {
-            calculateRelations(nextHexagramMap[key], binaryIndex);
-        }
-
-        rawHexagramData = YizhiApp.utils.deepClone(sourceHexagrams);
-        baguaData = nextBaguaData;
-        hexagramMap = nextHexagramMap;
-    }
-
-    function validateHexagramData(data) {
-        if (!isPlainObject(data)) {
-            throw new Error('Hexagram data must be an object.');
-        }
-
-        const keys = Object.keys(data);
-        const expectedKeys = Array.from({ length: 64 }, (_, index) => String(index + 1));
-        if (keys.length !== 64 || expectedKeys.some(key =>
-            !Object.prototype.hasOwnProperty.call(data, key))) {
-            throw new Error('Hexagram data must contain exactly ids 1 through 64.');
-        }
-
-        const binaryValues = new Set();
-        const snapshot = YizhiApp.utils.deepClone(data);
-
-        for (const key of expectedKeys) {
-            const hexagram = snapshot[key];
-            if (!isPlainObject(hexagram)) {
-                throw new Error(`Hexagram ${key} must be an object.`);
-            }
-            if (typeof hexagram.name !== 'string' || hexagram.name.trim() === '') {
-                throw new Error(`Hexagram ${key} must have a name.`);
-            }
-            if (typeof hexagram.explanation !== 'string') {
-                throw new Error(`Hexagram ${key} must have an explanation.`);
-            }
-            if (typeof hexagram.binary !== 'string' || !/^[01]{6}$/.test(hexagram.binary)) {
-                throw new Error(`Hexagram ${key} must have a six-bit binary code.`);
-            }
-            if (binaryValues.has(hexagram.binary)) {
-                throw new Error(`Hexagram binary code ${hexagram.binary} must be unique.`);
-            }
-            binaryValues.add(hexagram.binary);
-
-            if (!Array.isArray(hexagram.lines) || hexagram.lines.length !== 6) {
-                throw new Error(`Hexagram ${key} must contain six lines.`);
-            }
-            hexagram.lines.forEach((line, index) => {
-                if (!isPlainObject(line) || line.position !== index + 1 || typeof line.content !== 'string') {
-                    throw new Error(`Hexagram ${key} line ${index + 1} is invalid.`);
-                }
             });
         }
 
-        return snapshot;
+        try {
+            await preloadPromises[key];
+        } catch (error) {
+            console.warn(`加载${DATASETS[key].label}预加载脚本失败。`, error);
+        }
+        return getPreloaded(key);
     }
 
-    function validateBaguaData(data) {
-        const requiredNames = Object.keys(REQUIRED_BAGUA_BINARIES);
-        if (!isPlainObject(data) || Object.keys(data).length !== requiredNames.length ||
-            requiredNames.some(name => !Object.prototype.hasOwnProperty.call(data, name))) {
-            throw new Error('Bagua data must contain the fixed keys 乾、坤、震、巽、坎、离、艮、兑.');
-        }
+    function loadPreloadScript(src, label) {
+        return new Promise((resolve, reject) => {
+            const existingScript = document.querySelector(`script[src="${src}"]`);
+            if (existingScript) {
+                if (existingScript.getAttribute('data-loaded') === 'true') {
+                    resolve();
+                    return;
+                }
 
-        const binaryValues = new Set();
-        const snapshot = YizhiApp.utils.deepClone(data);
-        for (const name of requiredNames) {
-            const bagua = snapshot[name];
-            if (!isPlainObject(bagua) || typeof bagua.binary !== 'string' ||
-                !/^[01]{3}$/.test(bagua.binary)) {
-                throw new Error(`Bagua ${name} is invalid.`);
+                existingScript.addEventListener('load', () => resolve(), { once: true });
+                existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${label}`)), { once: true });
+                return;
             }
-            const invalidTextField = REQUIRED_BAGUA_TEXT_FIELDS.find(field =>
-                typeof bagua[field] !== 'string' || bagua[field].trim() === '');
-            if (invalidTextField) {
-                throw new Error(`Bagua ${name} must have a non-empty ${invalidTextField} field.`);
-            }
-            if (bagua.binary !== REQUIRED_BAGUA_BINARIES[name]) {
-                throw new Error(`Bagua ${name} must use canonical binary ${REQUIRED_BAGUA_BINARIES[name]}.`);
-            }
-            if (binaryValues.has(bagua.binary)) {
-                throw new Error(`Bagua binary code ${bagua.binary} must be unique.`);
-            }
-            binaryValues.add(bagua.binary);
+
+            const script = document.createElement('script');
+            script.src = src;
+            script.defer = true;
+            script.setAttribute('data-role', label);
+
+            script.addEventListener('load', () => {
+                script.setAttribute('data-loaded', 'true');
+                resolve();
+            }, { once: true });
+
+            script.addEventListener('error', () => {
+                reject(new Error(`Failed to load ${label}`));
+            }, { once: true });
+
+            document.head.appendChild(script);
+        });
+    }
+
+    // 经传为增强数据：加载失败只记录警告，界面退回白话数据中的爻辞
+    async function loadClassics() {
+        try {
+            return await loadDataset('zhouyi');
+        } catch (error) {
+            console.warn('经传原文加载失败，仅显示白话数据。', error);
+            return null;
         }
-        return snapshot;
+    }
+
+    /**
+     * 统一爻辞结构：{ position, title, text（经文）, gloss（白话）, xiang（小象）, content（旧字段） }
+     * 有经传原文时以原文为准，白话取旧数据中经文之后的部分
+     */
+    function normalizeLines(hexagram, classic) {
+        return (hexagram.lines || []).map((line, index) => {
+            const parts = YiCore.splitLineText(line.content);
+            const source = classic?.lines?.[index];
+            return {
+                position: index + 1,
+                content: line.content,
+                title: source?.title || parts.title || YiCore.lineTitle(index + 1, hexagram.bits[index] === 1),
+                text: source?.text || parts.classic,
+                gloss: source ? YiCore.glossAfterClassic(line.content, source.text) : parts.gloss,
+                xiang: source?.xiang || ''
+            };
+        });
     }
 
     function isPlainObject(value) {
         return value !== null && typeof value === 'object' && !Array.isArray(value);
     }
 
-    // 计算卦象的上下卦
-    function calculateTrigrams(hexagram, sourceBaguaData = baguaData) {
-        const binary = hexagram.binary;
-        if (binary && binary.length === 6) {
-            const upperBinary = binary.slice(0, 3);
-            const lowerBinary = binary.slice(3);
+    function hasText(value) {
+        return typeof value === 'string' && value.trim() !== '';
+    }
 
-            hexagram.upperTrigram = getBaguaByBinary(upperBinary, sourceBaguaData);
-            hexagram.lowerTrigram = getBaguaByBinary(lowerBinary, sourceBaguaData);
-            if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
-                throw new Error(`Hexagram ${hexagram.id} references unknown trigrams.`);
+    function snapshotOf(data) {
+        const clone = YizhiApp.utils?.deepClone;
+        return typeof clone === 'function' ? clone(data) : JSON.parse(JSON.stringify(data));
+    }
+
+    // 六十四卦必须恰好含 1–64，卦画唯一且为六位 0/1，六爻齐全；否则整体拒绝
+    function validateHexagramData(data) {
+        if (!isPlainObject(data)) throw new Error('卦象数据必须是对象。');
+
+        const expectedKeys = Array.from({ length: 64 }, (_, index) => String(index + 1));
+        if (Object.keys(data).length !== 64 || expectedKeys.some(key => !Object.prototype.hasOwnProperty.call(data, key))) {
+            throw new Error('卦象数据必须恰好包含第 1–64 卦。');
+        }
+
+        const snapshot = snapshotOf(data);
+        const binaries = new Set();
+        for (const key of expectedKeys) {
+            const hexagram = snapshot[key];
+            if (!isPlainObject(hexagram)) throw new Error(`第 ${key} 卦必须是对象。`);
+            if (!hasText(hexagram.name)) throw new Error(`第 ${key} 卦缺少卦名。`);
+            if (typeof hexagram.explanation !== 'string') throw new Error(`第 ${key} 卦缺少卦义。`);
+            if (typeof hexagram.binary !== 'string' || !/^[01]{6}$/.test(hexagram.binary)) {
+                throw new Error(`第 ${key} 卦的卦画必须是六位 0/1。`);
             }
-        }
-    }
+            if (binaries.has(hexagram.binary)) throw new Error(`卦画 ${hexagram.binary} 重复。`);
+            binaries.add(hexagram.binary);
 
-    // 计算关系数据结构
-    function calculateRelations(hexagram, binaryIndex = null) {
-        hexagram.relations = {};
-        hexagram.relations.opposite = calculateOpposite(hexagram.binary, binaryIndex);
-        hexagram.relations.inverse = calculateInverse(hexagram.binary, binaryIndex);
-        hexagram.relations.mutual = calculateMutual(hexagram.binary, binaryIndex);
-
-        if (Object.values(hexagram.relations).some(id => id === null)) {
-            throw new Error(`Hexagram ${hexagram.id} has an unresolved relation.`);
-        }
-    }
-
-    // 计算对宫卦
-    function calculateOpposite(binary, binaryIndex) {
-        const oppositeBinary = binary.split('').map(bit => bit === '1' ? '0' : '1').join('');
-        return getHexagramIdByBinary(oppositeBinary, binaryIndex);
-    }
-
-    // 计算综卦
-    function calculateInverse(binary, binaryIndex) {
-        const inverseBinary = binary.split('').reverse().join('');
-        return getHexagramIdByBinary(inverseBinary, binaryIndex);
-    }
-
-    // 计算互卦
-    function calculateMutual(binary, binaryIndex) {
-        const third = binary.charAt(2);
-        const fourth = binary.charAt(3);
-        const fifth = binary.charAt(4);
-        const second = binary.charAt(1);
-
-        const mutualBinary = second + third + fourth + third + fourth + fifth;
-        return getHexagramIdByBinary(mutualBinary, binaryIndex);
-    }
-
-    // 通过二进制获取卦象ID
-    function getHexagramIdByBinary(binary, binaryIndex = null) {
-        if (binaryIndex) {
-            return binaryIndex.get(binary) ?? null;
-        }
-        for (const key in hexagramMap) {
-            if (hexagramMap[key].binary === binary) {
-                return parseInt(key);
+            if (!Array.isArray(hexagram.lines) || hexagram.lines.length !== 6) {
+                throw new Error(`第 ${key} 卦必须恰好六爻。`);
             }
+            hexagram.lines.forEach((line, index) => {
+                if (!isPlainObject(line) || line.position !== index + 1 || typeof line.content !== 'string') {
+                    throw new Error(`第 ${key} 卦第 ${index + 1} 爻结构不合法。`);
+                }
+            });
         }
-        return null;
+        return snapshot;
     }
 
-    // 根据二进制代码获取八卦
-    function getBaguaByBinary(binary, sourceBaguaData = baguaData) {
-        if (!sourceBaguaData) {
+    // 八卦键名与卦画固定，展示字段不得为空
+    function validateBaguaData(data) {
+        const names = Object.keys(REQUIRED_BAGUA_BINARIES);
+        if (!isPlainObject(data) || Object.keys(data).length !== names.length
+            || names.some(name => !Object.prototype.hasOwnProperty.call(data, name))) {
+            throw new Error('八卦数据必须恰好包含乾、坤、震、巽、坎、离、艮、兑。');
+        }
+
+        const snapshot = snapshotOf(data);
+        for (const name of names) {
+            const bagua = snapshot[name];
+            if (!isPlainObject(bagua) || bagua.binary !== REQUIRED_BAGUA_BINARIES[name]) {
+                throw new Error(`${name}卦必须使用固定卦画 ${REQUIRED_BAGUA_BINARIES[name]}。`);
+            }
+            const missing = REQUIRED_BAGUA_TEXT_FIELDS.find(field => !hasText(bagua[field]));
+            if (missing) throw new Error(`${name}卦缺少 ${missing} 字段。`);
+        }
+        return snapshot;
+    }
+
+    // 下游直接当作字符串 / 字符串数组使用的字段：缺省可以，存在则类型必须正确
+    const CLASSIC_TEXT_FIELDS = Object.freeze(['tuan', 'daxiang', 'xugua', 'zagua']);
+    const CLASSIC_LIST_FIELDS = Object.freeze(['wenyan', 'notes']);
+    const APPENDIX_KEYS = Object.freeze(['xici_shang', 'xici_xia', 'shuogua', 'xugua', 'zagua']);
+
+    const isOptionalText = value => value === undefined || typeof value === 'string';
+    const isTextList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
+    const isClassicLine = line => isPlainObject(line) && hasText(line.title) && hasText(line.text) && isOptionalText(line.xiang);
+
+    function isClassicEntry(entry) {
+        return isPlainObject(entry) && hasText(entry.judgment)
+            && Array.isArray(entry.lines) && entry.lines.length === 6 && entry.lines.every(isClassicLine)
+            && (entry.extra === undefined || isClassicLine(entry.extra))
+            && CLASSIC_TEXT_FIELDS.every(field => isOptionalText(entry[field]))
+            && CLASSIC_LIST_FIELDS.every(field => entry[field] === undefined || isTextList(entry[field]));
+    }
+
+    // 经传为可选增强：结构不完整时整体弃用（返回 null），不影响白话数据就绪
+    function validateClassics(data) {
+        if (!data) return null;
+        const valid = isPlainObject(data) && hasText(data.source) && isPlainObject(data.hexagrams)
+            && Array.from({ length: 64 }, (_, index) => data.hexagrams[index + 1]).every(isClassicEntry)
+            && isPlainObject(data.appendix) && APPENDIX_KEYS.every(key => isTextList(data.appendix[key]));
+        if (!valid) {
+            console.warn('经传原文结构不完整，已弃用，仅显示白话数据。');
             return null;
         }
-        for (const name in sourceBaguaData) {
-            if (sourceBaguaData[name].binary === binary) {
-                return name;
-            }
-        }
-        return null;
+        return snapshotOf(data);
     }
 
-    // 公共API方法
-    function getHexagramByBinary(binary) {
-        for (const key in hexagramMap) {
-            if (hexagramMap[key].binary === binary) {
-                const hexagram = hexagramMap[key];
-                if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
-                    calculateTrigrams(hexagram);
-                }
-                return hexagram;
+    /**
+     * 处理卦象数据：校验 → 建立索引 → 补齐全名、卦画、上下卦、关系卦与经传原文。
+     * 全部在局部变量中完成，任一步失败即抛出，已有状态保持不变（不暴露部分快照）。
+     */
+    async function processHexagramData() {
+        const [rawBagua, rawHexagrams, rawClassics] = await Promise.all([
+            loadDataset('bagua'),
+            loadDataset('hexagrams'),
+            loadClassics()
+        ]);
+        const nextBagua = validateBaguaData(rawBagua);
+        const nextMap = validateHexagramData(rawHexagrams);
+        const nextClassics = validateClassics(rawClassics);
+
+        const nextBaguaByBinary = new Map(Object.entries(nextBagua).map(([name, data]) => [data.binary, name]));
+        const nextIdByBinary = new Map();
+        const nextByTrigrams = new Map();
+
+        for (const key of Object.keys(nextMap)) {
+            const hexagram = nextMap[key];
+            hexagram.id = parseInt(key, 10);
+            nextIdByBinary.set(hexagram.binary, hexagram.id);
+        }
+
+        const relationOf = binary => nextIdByBinary.get(binary) || null;
+        for (const hexagram of Object.values(nextMap)) {
+            const classic = nextClassics?.hexagrams?.[hexagram.id] || null;
+            hexagram.bits = YiCore.binaryToBits(hexagram.binary);
+            hexagram.classic = classic;
+            hexagram.judgment = classic?.judgment || '';
+            hexagram.lines = normalizeLines(hexagram, classic);
+            hexagram.upperTrigram = nextBaguaByBinary.get(hexagram.binary.slice(0, 3)) || null;
+            hexagram.lowerTrigram = nextBaguaByBinary.get(hexagram.binary.slice(3)) || null;
+            if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
+                throw new Error(`第 ${hexagram.id} 卦无法解析上下卦。`);
+            }
+            hexagram.fullName = YiCore.fullName(hexagram, nextBagua[hexagram.upperTrigram], nextBagua[hexagram.lowerTrigram]);
+            nextByTrigrams.set(`${hexagram.upperTrigram}_${hexagram.lowerTrigram}`, hexagram.id);
+
+            hexagram.relations = {
+                opposite: relationOf(YiCore.oppositeBinary(hexagram.binary)),
+                inverse: relationOf(YiCore.inverseBinary(hexagram.binary)),
+                mutual: relationOf(YiCore.mutualBinary(hexagram.binary))
+            };
+            if (Object.values(hexagram.relations).some(id => id === null)) {
+                throw new Error(`第 ${hexagram.id} 卦存在无法解析的错综互关系。`);
             }
         }
-        return null;
+
+        baguaData = nextBagua;
+        baguaNameByBinary = nextBaguaByBinary;
+        classics = nextClassics;
+        hexagramMap = nextMap;
+        hexagramIdByBinary = nextIdByBinary;
+        hexagramByTrigramKey = nextByTrigrams;
+    }
+
+    function getHexagramIdByBinary(binary) {
+        return hexagramIdByBinary ? (hexagramIdByBinary.get(binary) || null) : null;
+    }
+
+    function getBaguaByBinary(binary) {
+        return baguaNameByBinary ? (baguaNameByBinary.get(binary) || null) : null;
+    }
+
+    function getHexagramByBinary(binary) {
+        const id = getHexagramIdByBinary(binary);
+        return id ? getHexagramById(id) : null;
     }
 
     function getHexagramById(id) {
-        const hexagram = hexagramMap[id] || null;
-        if (hexagram) {
-            if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
-                calculateTrigrams(hexagram);
-            }
-            if (!hexagram.relations) {
-                calculateRelations(hexagram);
-            }
-        }
-        return hexagram;
+        return hexagramMap[id] || null;
     }
 
     function getBaguaData() {
@@ -353,39 +342,87 @@ const HexagramDataService = (function() {
     }
 
     function getHexagramByTrigrams(upper, lower) {
-        for (const key in hexagramMap) {
-            const hexagram = hexagramMap[key];
-            if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
-                calculateTrigrams(hexagram);
-            }
-            if (hexagram.upperTrigram === upper && hexagram.lowerTrigram === lower) {
-                return hexagram;
-            }
-        }
-        return null;
+        const id = hexagramByTrigramKey ? hexagramByTrigramKey.get(`${upper}_${lower}`) : null;
+        return id ? getHexagramById(id) : null;
     }
 
+    // 系辞、说卦、序卦、杂卦全文及出处；未加载经传时为 null
+    function getClassics() {
+        return classics ? { source: classics.source, appendix: classics.appendix } : null;
+    }
+
+    // 截取命中位置附近的片段，供结果列表展示“为何命中”
+    function snippetAround(text, index, length) {
+        const start = Math.max(0, index - 12);
+        const end = Math.min(text.length, index + length + 24);
+        return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
+    }
+
+    /**
+     * 排序搜索：卦名 > 卦序 > 卦义关键词 > 卦辞 > 爻辞 > 彖象 > 概述 > 详解
+     * 返回 [{ hexagram, score, field, snippet }]
+     */
     function searchHexagrams(keyword) {
-        keyword = keyword.toLowerCase();
-        const results = [];
+        const query = String(keyword || '').trim().toLowerCase();
+        if (!query) return [];
 
-        for (const key in hexagramMap) {
-            const hexagram = hexagramMap[key];
-            if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
-                calculateTrigrams(hexagram);
+        const results = [];
+        const numeric = /^\d{1,2}$/.test(query) ? parseInt(query, 10) : null;
+
+        for (const hexagram of getAllHexagrams()) {
+            const name = hexagram.name.toLowerCase();
+            const fullName = (hexagram.fullName || '').toLowerCase();
+            const classic = hexagram.classic || {};
+            let score = 0;
+            let field = '';
+            let snippet = '';
+
+            if (name === query || fullName === query) {
+                score = 100;
+                field = 'name';
+            } else if (numeric !== null && hexagram.id === numeric) {
+                score = 90;
+                field = 'id';
+            } else if (name.includes(query) || fullName.includes(query)) {
+                score = 80;
+                field = 'name';
+            } else if ((hexagram.explanation || '').toLowerCase().includes(query)) {
+                score = 60;
+                field = 'explanation';
+            } else {
+                const candidates = [
+                    ['judgment', hexagram.judgment || '', 50],
+                    ...hexagram.lines.map(line => ['line', `${line.title}，${line.text}`, 45]),
+                    ...(classic.extra ? [['line', `${classic.extra.title}，${classic.extra.text}`, 45]] : []),
+                    ['tuan', classic.tuan || '', 35],
+                    ['xiang', classic.daxiang || '', 35],
+                    ...hexagram.lines.map(line => ['xiang', line.xiang || '', 32]),
+                    ['overview', hexagram.overview || '', 30],
+                    ...hexagram.lines.map(line => ['gloss', line.gloss || '', 25]),
+                    ['wenyan', (classic.wenyan || []).join(''), 22],
+                    ['detail', hexagram.detail || '', 20]
+                ];
+
+                for (const [candidateField, text, candidateScore] of candidates) {
+                    const index = text.toLowerCase().indexOf(query);
+                    if (index >= 0) {
+                        score = candidateScore;
+                        field = candidateField;
+                        snippet = snippetAround(text, index, query.length);
+                        break;
+                    }
+                }
             }
 
-            if (hexagram.name.toLowerCase().includes(keyword) ||
-                hexagram.explanation.toLowerCase().includes(keyword) ||
-                (hexagram.overview && hexagram.overview.toLowerCase().includes(keyword)) ||
-                (hexagram.detail && hexagram.detail.toLowerCase().includes(keyword))) {
-                results.push(hexagram);
+            if (score > 0) {
+                results.push({ hexagram, score, field, snippet });
             }
         }
 
-        return results;
+        return results.sort((a, b) => b.score - a.score || a.hexagram.id - b.hexagram.id);
     }
 
+    // 错卦恒存在；综卦、互卦与本卦相同时省略
     function getRelatedHexagrams(hexagramId) {
         const hexagram = hexagramMap[hexagramId];
         if (!hexagram || !hexagram.relations) {
@@ -394,14 +431,17 @@ const HexagramDataService = (function() {
 
         const related = {};
         for (const [type, id] of Object.entries(hexagram.relations)) {
-            related[type] = getHexagramById(id);
+            if (!id || (type !== 'opposite' && id === hexagram.id)) continue;
+            const relatedHexagram = getHexagramById(id);
+            if (relatedHexagram) {
+                related[type] = relatedHexagram;
+            }
         }
-
         return related;
     }
 
     function getAllHexagrams() {
-        return Object.values(hexagramMap);
+        return Object.values(hexagramMap).sort((a, b) => a.id - b.id);
     }
 
     return {
@@ -411,9 +451,11 @@ const HexagramDataService = (function() {
         getBaguaData,
         getBagua,
         getHexagramByTrigrams,
+        getClassics,
         searchHexagrams,
         getRelatedHexagrams,
         getAllHexagrams,
+        RELATION_NAMES: Object.freeze({ opposite: '错卦', inverse: '综卦', mutual: '互卦' }),
         get isInitialized() { return isInitialized; }
     };
 })();

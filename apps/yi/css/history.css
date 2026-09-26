@@ -1,0 +1,169 @@
+/* 占记视图 + 全局无障碍/打印适配 */
+.history-list {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.history-item {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    transition: border-color var(--dur-fast) var(--ease);
+}
+
+.history-item:hover {
+    border-color: var(--line-strong);
+}
+
+.history-open {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-4) var(--space-5);
+    border: 0;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    background: transparent;
+    text-align: left;
+}
+
+.history-figures {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--ink-4);
+    font-size: var(--text-xs);
+}
+
+.history-main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.history-names {
+    font-family: var(--font-serif);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.history-names .of {
+    margin: 0 0.3em;
+    color: var(--ink-3);
+    font-weight: 400;
+    font-size: var(--text-sm);
+}
+
+.history-question {
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-question.is-empty {
+    color: var(--ink-3);
+}
+
+.history-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+    padding-left: var(--space-3);
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+
+.history-delete {
+    align-self: center;
+    margin-right: var(--space-3);
+    color: var(--ink-3);
+}
+
+.history-delete:hover {
+    color: var(--cinnabar);
+}
+
+@media (max-width: 720px) {
+    .history-open {
+        flex-wrap: wrap;
+        padding: var(--space-4);
+    }
+
+    .history-main {
+        flex: 1;
+    }
+
+    .history-meta {
+        flex-basis: 100%;
+        margin-left: 0;
+        padding-left: 0;
+    }
+}
+
+/* 减少动态效果：去除所有过渡与动画 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@media (forced-colors: active) {
+    /* 阴爻依赖 currentColor 渐变断开，只改颜色、不覆盖 background */
+    .yao {
+        forced-color-adjust: none;
+        color: CanvasText;
+    }
+
+    .yao.is-changing {
+        color: Highlight;
+    }
+}
+
+/* 打印：只保留卦与解读 */
+@media print {
+    .topbar,
+    .nav,
+    .cast-actions,
+    .coins,
+    .reading-footer,
+    .toasts,
+    .question-field {
+        display: none !important;
+    }
+
+    body {
+        background: #fff;
+    }
+
+    .page {
+        padding: 0;
+    }
+
+    .panel,
+    .pair-card {
+        box-shadow: none;
+        border-color: #ccc;
+    }
+
+    .cast-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .cast-panel {
+        position: static;
+    }
+}

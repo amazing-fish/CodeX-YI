@@ -11,29 +11,45 @@
 
 ## 项目地图
 
-- 模块列表（名称 / 职责 / 入口 / 主要依赖）：
-  - theme / 主题切换与跟随系统 / 入口：`apps/yi/index.html:673`；注册：`apps/yi/js/app.js:901-903` / 依赖：事件总线、存储
-  - notification / 全局提示通知 / 入口：`apps/yi/index.html:674`；注册：`apps/yi/js/app.js:904-906` / 依赖：事件总线
-  - hexagramData / 卦象与八卦数据管理 / 入口：`apps/yi/index.html:672`；注册：`apps/yi/js/app.js:907-909` / 依赖：`services/hexagram-data-service-module.js`
-  - divination / 铜钱投掷与卦象成型 / 入口：`apps/yi/index.html:675`；注册：`apps/yi/js/app.js:910-912` / 依赖：数据服务、UI
-  - history / 本地历史记录与导出 / 入口：`apps/yi/index.html:676`；注册：`apps/yi/js/app.js:913-915` / 依赖：存储
-  - hexagram-analyzer / 上下卦组合分析 / 入口：`apps/yi/index.html:677`；注册：`apps/yi/js/app.js:916-918` / 依赖：数据服务
-  - knowledge / 八卦知识展示 / 入口：`apps/yi/index.html:678`；注册：`apps/yi/js/app.js:919-921` / 依赖：数据服务
-  - search / 关键词与标签查询 / 入口：`apps/yi/index.html:679`；注册：`apps/yi/js/app.js:922-924` / 依赖：数据服务
-  - modal / 卦象详情模态框 / 入口：`apps/yi/index.html:680`；注册：`apps/yi/js/app.js:925-927` / 依赖：UI、事件
-  - help / 帮助说明 / 入口：`apps/yi/index.html:681`；注册：`apps/yi/js/app.js:928-930` / 依赖：UI
+- 视图（hash 路由 `#cast` / `#library` / `#trigrams` / `#history`，`Alt+1~4` 切换）：
+  - 起卦 `cast` / 三钱起卦、成卦台、本卦→之卦、解读指引、保存/复制/导出 / `apps/yi/js/modules/divination-module.js`
+  - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
+  - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
+  - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
+- 支撑模块：
+  - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
+  - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
+  - 应用内核 `YizhiApp` / 配置、存储、事件、错误、原生对话框、路由、通用 UI 片段 / `apps/yi/js/app.js`
+  - `notification`（toast，可带“撤销”等操作）、`theme`（深浅色）、`modal`（卦详情 `<dialog>`）、`help`（使用说明 `<dialog>`）/ `apps/yi/js/modules/`
+- 样式（按关注点拆分，均为无构建的原生 CSS）：`apps/yi/css/tokens.css`（设计令牌/深色）→ `base.css`（排版、顶栏、底部导航）→ `components.css`（按钮/输入/分段/提示/对话框）→ `gua.css`（卦画）→ `taiji.css`（太极：主题切换、启动画面、载入态、成卦台中轴）→ `cast.css`（起卦、解读、经传与爻位标记）→ `library.css`（卦典、八卦与十翼）→ `history.css`（占记、减少动效、强制色、打印）
+- 数据（均为 JSON + 同内容 `.js` 回退）：`data/hexagrams.json`（卦名、卦画、白话）、`data/bagua.json`（八卦属性）、`data/zhouyi.json`（经传原文，v2.1.0 新增，可选）
+- 测试与 CI：`apps/yi/tests/validate-project.mjs` 为统一入口（许可证、文档、HTML 契约、数据回退一致、JS 语法，并依次运行 `yijing-core.test.mjs` 与 6 份契约测试）；`.github/workflows/pages.yml` 对所有 PR 与 main 运行验证，仅 main 构建并部署 Pages，Actions 固定到 commit SHA
+- 仓库卫生：`.gitattributes` 规定文本 LF；`.githooks/commit-msg` 要求提交信息含中文（`git config core.hooksPath .githooks` 启用），`.gitmessage` 为提交模板；`LICENSE` 为 MIT
 
-- 入口与加载顺序：`apps/yi/index.html:668-682` 按 `defer` 顺序加载：`app.js` → 预加载 `data/*.js` → `services` → 各 `modules`
+- 入口与加载顺序：`apps/yi/index.html:364-374` 按 `defer` 顺序加载 `core/yijing-core.js` → `app.js` → `services` → 各 `modules`；模块注册顺序即初始化顺序，见 `apps/yi/js/app.js:703`（`data/*.js` 仍由数据服务按需回退加载）
 
 - 关键逻辑链路：
-  - 错误处理：统一入口 `apps/yi/js/app.js:296-333`；模块初始化包装 `apps/yi/js/app.js:606-613`；全局错误与 Promise 拒绝监听 `apps/yi/js/app.js:587-593`、`958-965`
-  - 配置加载：`apps/yi/js/app.js:10-30`（名称/版本/调试/性能阈值/存储前缀/动画时长）
-  - 数据 IO 边界：卦象数据加载与回退 `apps/yi/js/services/hexagram-data-service-module.js:39-69`；八卦数据加载与回退 `78-113`
-  - 六爻编码约定：`binary` 从上到下记录，`slice(0, 3)` 为上卦、`slice(3)` 为下卦；全量内容契约位于 `apps/yi/tests/hexagram-content-contract.mjs`
-  - 事件驱动：模块注册事件 `apps/yi/js/app.js:484-486`；数据就绪事件 `apps/yi/js/services/hexagram-data-service-module.js:27-28`；导航与标签页事件 `apps/yi/js/app.js:682-685`、`720-722`
-  - 性能监控：计时与阈值告警 `apps/yi/js/app.js:244-293`；注册/初始化打点 `apps/yi/js/app.js:475-479`、`609-612`
-  - 存储回退：`sessionStorage` 不可用时转内存 Map `apps/yi/js/app.js:167-178`、`195-201`
-  - 生命周期：初始化流程 `apps/yi/js/app.js:533-575`；销毁/重启 `apps/yi/js/app.js:819-849`
+  - 起卦状态：唯一状态源为 `state.lines`（自下而上），成卦台、按钮、状态文案、解读全部由其推导；投掷入口 `apps/yi/js/modules/divination-module.js:84`
+  - 投掷取消：`generation` 代次在重置与载入占记时递增（`cancelPending` `apps/yi/js/modules/divination-module.js:672`），进行中的投掷在动画结束后比对代次，过期即放弃写入，避免旧投掷写进新卦或占记之后
+  - 三钱规则：背记 3、字记 2，和为 6/7/8/9 → 老阴/少阳/少阴/老阳；随机源优先 `crypto.getRandomValues` `apps/yi/js/core/yijing-core.js`
+  - 断卦规则：依《易学启蒙·考变占》按变爻数 0~6 给出应看之处（乾坤六爻皆变用“用九/用六”）`apps/yi/js/core/yijing-core.js:25`、`237`；解读指引渲染 `apps/yi/js/modules/divination-module.js:402`，“以卦辞为断”时引卦辞与大象，爻则引爻辞、小象与爻位
+  - 二进制约定：`binary` 为上爻在前的 6 位字符串，`slice(0, 3)` 为上卦、`slice(3)` 为下卦，与 `data/hexagrams.json` 一致；`bits` 为自下而上数组，仅用于渲染；全量内容契约见 `apps/yi/tests/hexagram-content-contract.mjs`
+  - 数据校验（失败关闭）：六十四卦须恰好 1–64、卦画唯一、六爻齐全；八卦键名与卦画固定且展示字段非空 `apps/yi/js/services/hexagram-data-service-module.js:179`、`213`；网络失败时 `.js` 回退走同一校验；全部在局部变量中构建，上下卦或错综互任一无法解析即抛出，校验通过后才原子提交并发出 ready `266`；经传为可选增强，卦辞/六爻/用九用六、彖象序杂与文言校记的类型及五篇附录任一不合法即整体弃用 `250`
+  - 爻辞结构：数据服务把每爻统一为 `{ title, text（经文）, gloss（白话）, xiang（小象）, content（旧字段） }` `apps/yi/js/services/hexagram-data-service-module.js:150`；有经传时经文取原文，白话由 `glossAfterClassic` 忽略标点比对剥离（比对不上退回 `splitLineText` 按首个句号切分）`apps/yi/js/core/yijing-core.js:119`、`147`
+  - 经传原文：`hexagram.classic = { judgment, tuan, daxiang, lines[6], extra（用九/用六）, wenyan（乾坤）, xugua, zagua, notes }`，`hexagram.judgment` 为卦辞快捷字段；系辞、说卦、序卦、杂卦全文经 `getClassics()` 取得 `hexagram-data-service-module.js:350`；渲染片段 `UI.classicBlock` / `UI.wingsBlock` `apps/yi/js/app.js:377`
+  - 经传来源与生成：王弼《周易注》底本（易學網校对，gist sui1491/52e8214c…），经 OpenCC 词典繁转简；“乾”不转“干”，罕用字（CJK 扩展 A 及 BMP 外）保留繁体以免缺字；坎上六“黴纆”据通行本改“徽纆”并记入 `notes`。已与 LarryZhu-dev/thebookofchanges 逐字比对，差异均为版本异文（如革“已日/己日”）或对方讹误（如蒙“初筮/初噬”）
+  - 爻位：`linePositions(bits)` 给出当位（阳居奇、阴居偶）、居中（二、五）、相应（初四、二五、三上一阴一阳）；`positionSummary` 统计并点出“六爻皆当位（既济）/皆失位（未济）/三组皆应/上下无应” `apps/yi/js/core/yijing-core.js:175`、`195`；成卦台每爻显示当位/失位，卦文每爻显示 `UI.positionTags` `apps/yi/js/app.js:352`
+  - 卦画渲染：`YizhiApp.ui.figure` 以 CSS 绘制（不依赖 U+4DC0 字形），变爻附 ○/× 标记而非只靠颜色 `apps/yi/js/app.js:305`、`apps/yi/css/gua.css`
+  - 太极动效：同一 SVG（`UI.taiji`，`apps/yi/js/app.js:337`；阳=纸色、阴=墨色随主题互换）用于：主题切换（每次累计转半周，先转后以 View Transitions 自按钮圆形晕开新主题 `apps/yi/js/modules/theme-module.js:52`、`58`）、启动画面（400ms 后才显现，数据就绪淡出 `apps/yi/js/app.js:540`）、载入态 `UI.spinner`、成卦台中轴（每成一爻转 60°、与铜钱翻落同步，六爻成卦满一周并亮一圈朱晕 `apps/yi/js/modules/divination-module.js:220`、`230`）；减少动态效果时全部静止
+  - 数据 IO：三份数据同一加载/回退策略 `apps/yi/js/services/hexagram-data-service-module.js:56`，经传加载失败只告警、退回白话数据；排序搜索（卦名>卦序>卦义>卦辞>爻辞>彖/大象>小象>概述>白话>文言>详解）`365`，高亮前先转义并转义正则元字符 `apps/yi/js/app.js:483`；错综互 `426`
+  - 数据就绪：模块统一用 `YizhiApp.whenDataReady` 等待 `hexagram-data:ready`，失败时发出 `hexagram-data:error` 并各自显示错误态 `apps/yi/js/app.js:576`
+  - 存储边界：优先 `localStorage`，兼容迁移旧 `sessionStorage`，不可用时转内存 Map `apps/yi/js/app.js:135`；`localStorage` 读取异常仍尝试旧值，迁移写入失败时返回旧值并保留原数据待下次重试；键：`yizhi_theme`、`yizhi_divination_history`、`yizhi_library_layout`
+  - 占记编解码：存储结构 v1 只存引用与用户输入 `{ version: 1, id, timestamp, question, notes, lines: [6|7|8|9], hexagramId, source }`，不复制卦文 `apps/yi/js/modules/history-module.js:145`；读取时经数据服务按六爻（无六爻时按卦序）重新水合，非法卦序、未知版本、残缺六爻、无法构造有效日期的时间戳整条丢弃并回写清理 `98`、`167`；数据就绪前不读不写；兼容旧版完整 hexagram 对象、`{ type, changing }` 六爻与 `divination` 来源；删除可撤销 `211`；导入走同一解码并按 id 去重 `393`
+  - 安全渲染：占记列表以 DOM API 构建，所问与备注只经 `textContent` 输出 `apps/yi/js/modules/history-module.js:307`；卦详情只渲染 canonical 卦，传入对象仅取卦序重新查询 `apps/yi/js/modules/modal-module.js:32`；其余文本经 `escapeHtml`
+  - 从占记重读：六爻完整的记录回到起卦页完整还原 `apps/yi/js/modules/divination-module.js:717`；未保存进度被覆盖前需确认 `667`
+  - 对话框：统一原生 `<dialog>`（焦点圈定、Esc 由浏览器提供），点遮罩关闭、关闭后还原到最初的外部 opener（详情内切换关系卦不覆盖）、危险确认默认聚焦“取消” `apps/yi/js/app.js:243`
+  - 错误处理：`ErrorHandler.handle` 记录日志并以 toast 提示；全局 error/unhandledrejection 在 `YizhiApp.init` 中注册一次 `apps/yi/js/app.js:623`
+  - 键盘：空格掷爻（仅起卦页、非输入框）、`/` 或 `Ctrl+K` 搜索卦典、`?` 帮助、`Alt+1~4` 切换视图 `apps/yi/js/app.js:589`
 
 ## 工作流程与检查清单
 
@@ -57,6 +73,9 @@
 
 ## 最近14个版本变更日志
 
+- v2.1.1（bugfix/merge）：合并 main 的 v1.2.0–v1.7.5 修复并移植到 v2 结构：数据失败关闭校验与原子提交、占记 v1 编解码与 canonical 水合、持久化文本只经 textContent、存储迁移容错、重置/载入占记取消进行中的投掷；契约测试改写为 v2 并纳入统一验证入口
+- v2.1.0（feature）：补入经传原文（卦辞、爻辞、彖、大象、小象、文言、用九用六，及系辞上下、说卦、序卦、杂卦）；恢复并升级太极动效（主题切换半周旋转 + 墨晕揭示、启动画面、载入态、成卦台中轴）；外显爻位（当位/失位、居中、相应）
+- v2.0.0（refactor）：以“成卦即得所读之辞”为核心重构信息架构、交互与视觉；新增易理核心纯函数与单测、卦典方图、占记重读/撤销/导入；样式拆分为 7 个文件，代码量约减少 45%
 - v1.7.5（test/bugfix）：repository hygiene 只扫描 Git 已跟踪路径，排除未跟踪本地草稿对验证的干扰
 - v1.7.4（test/chore）：commit-msg hook 忽略注释化模板提示，拒绝“英文内容 + 中文模板”的假阳性
 - v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
@@ -68,17 +87,8 @@
 - v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 - v1.5.3（bugfix）：八卦 schema 固定每个卦名的 canonical 三位二进制映射，拒绝交换编码但仍格式唯一的语义畸形快照
-- v1.5.2（bugfix）：legacy sessionStorage 迁移写入 localStorage 失败时仍返回已解析旧值，并保留原数据供后续重试
-- v1.5.1（bugfix）：八卦 schema 强制要求 `乾/坤/震/巽/坎/离/艮/兑` 固定键，防止形式有效但业务查询不可达的数据进入 ready
-- v1.5.0（security/bugfix）：历史记录采用 versioned codec 与 canonical `hexagramId` 水合；清理非法/未知版本记录，安全渲染持久化字段，并分离 Modal 展示内容与可保存卦象
-- v1.4.0（bugfix）：为 64/8 数据快照建立严格 schema、两阶段关系索引和原子 ready 提交；空、缺失、畸形 JSON/JS fallback 均失败关闭
-- v1.3.1（bugfix）：保留首次打开 Modal 的外部焦点来源，避免相关卦象内导航覆盖 opener；补充焦点恢复行为回归测试
-- v1.3.0（bugfix）：补齐本地 favicon 与系统字体回退；修复搜索卦序/分类/特殊字符、推荐区 DOM 所有权、分析器就绪渲染、投掷重置竞态、重复错误监听和模态框焦点循环
-- v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
-- v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
-- v1.0.0（feature）：新增协作文档 `AGENTS.md` 与锚点文档 `ANCHOR.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
 
-> 说明：超出最近5个版本的记录请转入归档文件（如 `CHANGELOG-ARCHIVE.md`）。
+> 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
 ## 互动规则
 
@@ -92,6 +102,109 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.1.1
+
+- 变更版本：v2.1.1（bugfix/merge）
+- 改动概述：将 `main` 上 v1.2.0–v1.7.5 的稳定性与安全修复合并进 v2 分支。v2 已重写相关模块，因此不直接取用旧实现，而是把每条不变量移植到 v2 结构，并把针对 v1 DOM 的契约测试改写为 v2 行为测试，断言保持同等强度。
+- 版本号说明：v2 分支此前在本地登记的 v1.2.0–v1.5.0 从未推送，且与 `main` 上同号版本内容不同；合并后以 `main` 的 v1.x 为准，本地那几条已随 v2.0.0 一并落地，不再单列。
+- 影响模块：数据服务、存储、占记、起卦、卦详情；测试与验证入口；锚点与 README
+- 变更文件与补丁摘要：
+  - `hexagram-data-service-module.js`：新增 `validateHexagramData` / `validateBaguaData` / `validateClassics`；八卦固定键名与卦画、展示字段非空；六十四卦恰好 1–64、卦画唯一、六爻齐全；上下卦与错综互无法解析即抛出；全部在局部变量中构建后原子提交；经传结构不完整时整体弃用并告警
+  - `app.js`：`StorageManager.getItem` 将 localStorage 读取与迁移写入分别兜底；版本号 2.1.1
+  - `history-module.js`：重写为 v1 编解码——只存引用与用户输入，读取时按六爻/卦序经数据服务水合；拒绝非法卦序、未知版本、残缺六爻并回写清理；列表改为 DOM API 构建，持久化文本只经 `textContent`；数据未就绪时显示载入态、失败时显示错误态，均不触碰存储；导出改为存储结构
+  - `divination-module.js`：新增 `generation` 代次与 `cancelPending`；强制重置与载入占记会取消进行中的投掷
+  - `modal-module.js`：只渲染 canonical 卦，传入对象只取卦序重新查询
+  - 测试：`static-ui-contract.mjs`（真实数据服务 + 卦典的卦序/特殊字符/转义搜索、对话框 opener 保持、投掷取消）、`data-service-contract.mjs`（加载 YiCore，新增经传可选且损坏整体弃用）、`history-security-contract.mjs`（v2 API 下的编解码、canonical 水合、保存边界、详情 canonical、存储迁移容错）改写为 v2；`repository-hygiene-contract.mjs` 兼容 PATH 中 `Git\mingw64\bin\git.exe` 的布局查找 `sh.exe`；`validate-project.mjs` 合并双方检查并依次运行核心单测与 6 份契约
+  - 合并自 `main` 未改动：`.gitattributes`、`LICENSE`、`.githooks/commit-msg`、`.gitmessage`、`AGENTS.md`、`.github/workflows/pages.yml`、`hexagrams.json/.js`（屯、贲、升校正）、`hexagram-content-contract.mjs`、`ci-workflow-contract.mjs`、`docs/plans/*`
+  - 新增 `CHANGELOG-ARCHIVE.md`：收纳超出最近 14 个版本的变更日志
+- 默认值与安全边界：
+  - 占记最多保存 200 条（`APP_CONFIG.history.maxRecords`）；所问与备注去除控制字符并截断为 500 字，id 截断为 100 字
+  - 首次在 v2.1.1 打开占记时，旧记录会被一次性迁移为 v1 结构；无法校验的记录会被丢弃且不可恢复（与 `main` v1.5.0 行为一致）
+  - 数据加载失败时占记不读不写，避免把无法校验的记录误清掉
+- 验证步骤与结果：
+  - `node .\apps\yi\tests\validate-project.mjs`：通过（核心单测 13 项 + 6 份契约）
+  - 回归校验：临时去掉 `castOnce` 中的代次检查后，`static-ui-contract.mjs` 以“重置后旧投掷不得写入第一爻”失败，恢复后通过
+  - `git add --renormalize .` 后 `git ls-files --eol` 中 LF 策略文件均为 `i/lf`；`git diff --cached --check`：通过
+  - 浏览器（`python -m http.server 8765 --bind 127.0.0.1`，工作目录 `apps/yi`）：预置 4 条旧占记（恶意卦名 + HTML 备注、`{ type, changing }` 六爻、卦序 999、version 9）后打开占记——保留 2 条并回写为 v1 结构，备注以纯文本显示、列表内无注入节点；投掷中载入占记得完整六爻、无第七爻；投掷中强制重置后回到“掷第一爻”；一次成卦并保存后存储只含爻值与卦序；“查阅”记录打开 canonical 详情，伪造对象不打开；卦典搜索 `[(*` 无异常；390×844 深色无横向溢出；控制台 0 条消息
+- 评审修正（PR #26 Codex 评审 3 条 P2，均已复现后修复，并各补回归用例；回退修复时对应用例失败）：
+  - 占记时间戳须能构造有效 `Date`：此前 `1e20` 等正有限数会通过校验，渲染时 `toISOString()` 抛出 `RangeError` 拖垮整份列表
+  - 经传校验补齐 `source`、五篇附录（须为字符串数组）、用九用六、`tuan/daxiang/xugua/zagua`（字符串）、`wenyan/notes`（字符串数组）与小象类型：此前缺 `appendix` 时十翼区会抛错停在骨架态
+  - 恢复 `.githooks/commit-msg` 的 `100755` 可执行位：Windows 下 `core.fileMode=false` 合并时被降为 `100644`，Linux/macOS 上 hook 会被忽略；hygiene 契约新增索引执行位断言
+- 风险与后续事项：
+  - 旧版“查阅保存”记录只有卦序，重读时只能打开详情
+  - `docs/plans/2026-07-11-*` 描述的是 v1 结构下的修复方案，保留作为历史设计记录
+
+## 审计记录：v2.1.0
+
+- 变更版本：v2.1.0（feature）
+- 改动概述：回应三项反馈——①太极动效不可取消，需恢复并升级；②补全卦辞及十翼；③当位与否需外显。
+- 影响模块：数据服务、易理核心、起卦、卦详情、八卦 · 易传、主题；新增经传数据与太极样式
+- 变更文件与补丁摘要：
+  - 新增 `apps/yi/data/zhouyi.json` / `zhouyi.js`（约 124KB，内容一致）：64 卦卦辞、彖、大象、384 爻爻辞与小象、用九用六、乾坤文言、每卦序卦/杂卦对应句（乾坤不入序卦正文，62 卦有序卦句）；附系辞上 21 段、系辞下 16 段、说卦 17 段、序卦 18 段、杂卦 8 段；`source` 字段注明底本与转换规则
+  - `hexagram-data-service-module.js`：三份数据合并为同一 `loadDataset` 加载/回退逻辑；经传为可选增强；统一爻辞结构；新增 `getClassics()`；搜索覆盖卦辞、彖、象、文言与白话并标注命中字段
+  - `yijing-core.js`：新增 `glossAfterClassic`、`linePositions`、`positionSummary`；断卦规则文案由“卦义”恢复为“卦辞”
+  - `app.js`：新增 `UI.taiji`、`UI.spinner`、`UI.positionTags`、`UI.positionSummary`、`UI.classicBlock`、`UI.wingsBlock`、`BootSplash`；`lineList` 改为“爻题 + 爻位标记 / 经文 / 小象 / 白话”，乾坤附用九用六；版本号 2.1.0
+  - `divination-module.js`：成卦台骨架常驻，上下卦之间设太极中轴；每爻显示当位/失位；指引与卦文改用原文，新增“卦辞 · 彖 · 象”“白话”“传”分区；复制文本含卦辞、爻辞与小象
+  - `modal-module.js`：详情含卦辞、彖、象、爻位、小象、文言、序卦、杂卦；复制卦文同步
+  - `knowledge-module.js` + `index.html`：视图标题改为“八卦 · 易传”；新增“爻位”说明卡与“十翼”折叠全文；新增启动画面；主题按钮改为太极
+  - `theme-module.js`：太极累计半周旋转；先转 260ms 再以 View Transitions 圆形揭示新主题；连续点击以最后一次为准
+  - 新增 `css/taiji.css`；`cast.css` 新增经传、小象、爻位标记样式；`library.css` 新增十翼样式并将知识卡改为两列；`base.css` 删去不再使用的日月图标规则
+  - 测试：`yijing-core.test.mjs` 新增 4 项（爻位、白话剥离、经传完整性、用九用六与原文一致及 384 爻白话剥离）；`validate-project.mjs` 校验 `zhouyi.json` 与 `.js` 回退一致、64 卦、含出处
+- 默认值与安全边界：
+  - 经传数据缺失或加载失败时仅 `console.warn`，界面退回 v2.0.0 的白话爻辞，不阻断起卦
+  - 启动画面 8 秒兜底移除；无脚本（`noscript`）时不出现；启动异常时立即移除
+  - 所有经传文本经 `escapeHtml` 输出，不以 HTML 注入
+  - 未新增任何第三方依赖；繁简转换只在离线生成阶段使用 OpenCC 词典，不随站点发布
+- 验证步骤与结果：
+  - `node .\apps\yi\tests\yijing-core.test.mjs`：13 项全部通过
+  - `node .\apps\yi\tests\validate-project.mjs`：通过
+  - `Get-ChildItem -Path .\apps\yi\js -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }`：通过
+  - 浏览器（`python -m http.server 8765 --bind 127.0.0.1`，工作目录 `apps/yi`）：1440×900 深色下重读“既济之咸”——成卦台太极中轴转满一周，六爻均标“当位”，指引引六四、初九爻辞与小象及爻位标记，卦文显示卦辞/彖/象与“六爻皆当位，三组皆应”；切换主题太极转半周、主题正确切换、`aria-pressed` 同步；“八卦 · 易传”十翼五篇可展开；390×844 下乾卦详情显示用九、文言、杂卦，起卦页四列成卦行无溢出；控制台 0 errors / 0 warnings
+  - 数据校对：与 LarryZhu-dev/thebookofchanges 逐字段比对，108 处差异逐一复核，均为排版切分、通假异文或对方讹误，未发现本方转写错误
+- 风险与后续事项：
+  - 旧白话数据有 58 爻只存到经文首句，白话剥离采用“比对不上则按首句号切分”，个别爻白话可能仍含半句经文；后续可逐条校订 `hexagrams.json`
+  - 旧白话中有少量与原文不符的讹字（如同人九三“伏戎于莽”作“伏战于莽”），现在经文以原文为准，白话未改
+  - View Transitions 圆形揭示需 Chromium 111+ / Safari 18+，其他浏览器仅旋转后直接切换
+  - 序卦、杂卦按句归属到卦为规则切分（“而”后对举、名后置等），已逐卦人工核对；若更换底本需复核 `xugua` / `zagua`
+
+## 审计记录：v2.0.0
+
+- 变更版本：v2.0.0（refactor）
+- 改动概述：从“用户为何打开这个页面”出发重构信息架构、交互与视觉。核心路径由“掷六次 → 自己翻四个标签页找答案”改为“掷六次 → 直接看到本卦、之卦和应读的那一句”。
+- 第一性原理拆解：
+  - 用户的核心任务只有一个：问一件事，得到可读的卦与应看的辞。其余（查卦、学八卦、回顾）都是支线。
+  - 旧版对同一状态有五处重复反馈（步骤条、进度条、流程看板、过程日志、按钮副标题），合并为唯一的“成卦台”。
+  - 旧版需要手动点“变卦显示”才能看到之卦；新版本卦与之卦并排，按《易学启蒙》规则自动给出应读爻辞。
+  - “卦象分析”（选上下卦）与“卦象查询”本质都是找卦，合并为“卦典”：8×8 方图即上下卦组合，列表支持排序搜索。
+  - 删除无依据的“吉凶/事业/感情”按字匹配分类，避免给出看似权威的错误结果。
+- 影响模块：全部视图与样式；数据文件未改动
+- 变更文件与补丁摘要：
+  - 新增 `apps/yi/js/core/yijing-core.js`：三钱、爻、之卦、错综互、全名、爻辞拆分、断卦规则等纯函数
+  - 新增 `apps/yi/js/modules/library-module.js`；删除 `hexagram-analyzer-module.js`、`search-module.js`
+  - 重写 `apps/yi/index.html`：四视图 + 三个原生 `<dialog>`；窄屏改为底部导航；移除全屏加载遮罩与内联 onclick（启动失败兜底除外）
+  - 重写 `apps/yi/js/app.js`：精简为存储/事件/错误/对话框/路由/UI 片段；移除未使用的性能监控、restart/destroy、节流等
+  - 重写 `divination-module.js`、`history-module.js`、`knowledge-module.js`、`modal-module.js`、`notification-module.js`、`theme-module.js`、`help-module.js`
+  - 更新 `hexagram-data-service-module.js`：补齐 `fullName`/`bits`，排序搜索返回命中片段，加载失败发出 `hexagram-data:error`
+  - `css/styles.css`（4179 行）拆分为 7 个按关注点组织的样式文件；新视觉为“宣纸 / 墨 / 朱砂”，朱色只用于标记变爻
+  - 新增 `apps/yi/tests/yijing-core.test.mjs`；`validate-project.mjs` 改为校验 id 唯一、资源存在、脚本引用的 id 存在、视图与模块一一对应，并纳入核心单测
+  - 代码总量约 9369 行 → 约 5200 行（含新增测试与核心模块）
+- 交互细节：
+  - 空格掷爻；“一次成卦”加速剩余投掷；系统开启“减少动态效果”时跳过动画
+  - 重来/覆盖未保存的卦前确认；单条占记删除改为“撤销”而非确认弹窗
+  - 保存按钮保存后保持可聚焦（`aria-disabled`），避免焦点丢失；成卦后焦点移至解读标题，窄屏自动滚动到解读
+  - 深浅色默认跟随系统，手动切换后记忆
+- 验证步骤与结果：
+  - `node .\apps\yi\tests\yijing-core.test.mjs`：9 项全部通过（含 384 爻爻题与阴阳一致性）
+  - `node .\apps\yi\tests\validate-project.mjs`：通过
+  - `Get-ChildItem -Path .\apps\yi\js -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }`：通过
+  - 浏览器（`python -m http.server 8765 --bind 127.0.0.1`，工作目录 `apps/yi`）：1440×900 与 390×844 下完成起卦 → 保存 → 占记重读 → 删除并撤销 → 卦典搜索“潜龙”→ 方图打开“既济”详情 → 深浅色切换；控制台 0 errors / 0 warnings；无横向溢出
+  - 人工核对：无妄之家人（三、四爻变）指引为九四为主、六三参看；无妄错升、综大畜、互渐；既济错综互皆为未济
+- 风险与后续事项：
+  - 视觉依赖 `color-mix()`、`:has()`、容器查询与原生 `<dialog>`，需 2023 年后的主流浏览器；旧浏览器顶栏退化为不透明、弹窗打开时背景可滚动
+  - 数据只有卦义（白话概述），无传统卦辞原文；“以卦辞为断”的情形暂以卦义代替，后续可补充卦辞、彖传、象传字段
+  - 旧版占记若只存了卦（来自“查阅保存”），无法在起卦页重读，只能打开详情
+  - 卦名全名依赖八卦 `nature` 字段组合，若修改 `bagua.json` 需复跑单测
 
 ## 审计记录：v1.0.0
 
@@ -108,7 +221,7 @@
   - 结果：两文件存在且包含约定与模板
 - 风险与后续事项：
   - 后续需逐步填充“项目地图”与“关键逻辑链路”
-  - 将后续改动按版本写入“最近5个版本变更日志”
+  - 将后续改动按版本写入“最近14个版本变更日志”
 
 ## 审计记录：v1.1.0
 

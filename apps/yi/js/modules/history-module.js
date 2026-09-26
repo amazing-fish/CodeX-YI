@@ -1,462 +1,444 @@
 /**
- * 历史记录模块 - 管理占卜历史记录
+ * 占记模块 - 本机保存的卦
+ *
+ * 持久化结构 v1（存储键 yizhi_divination_history，只存引用与用户输入，不复制卦文）：
+ * { version: 1, id, timestamp, question, notes, lines: [6|7|8|9]×(0|6), hexagramId, source: 'cast'|'modal' }
+ * 读取时一律经数据服务按卦序/六爻重新水合；非法卦序、未知版本、损坏的六爻整条丢弃并回写清理。
+ * 兼容旧版：无 version、hexagram 为完整对象、lines 为 { type, changing } 或来源为 'divination'。
+ * 安全边界：所问与备注等持久化文本只经 textContent 输出，不拼入 innerHTML。
  */
 const HistoryModule = (function() {
-    // 私有变量
-    const historyList = document.getElementById('historyList');
-    const filterButtons = document.querySelectorAll('.filter-item');
-    const historySearchInput = document.getElementById('historySearchInput');
-    const exportHistoryBtn = document.getElementById('exportHistoryBtn');
-    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-    const totalRecords = document.getElementById('totalRecords');
-    const thisWeekRecords = document.getElementById('thisWeekRecords');
-    const changingLines = document.getElementById('changingLines');
+    const list = document.getElementById('historyList');
+    const summary = document.getElementById('historySummary');
+    const searchInput = document.getElementById('historySearch');
+    const rangeButtons = document.querySelectorAll('#historyRange [data-range]');
+    const exportBtn = document.getElementById('exportHistoryBtn');
+    const importBtn = document.getElementById('importHistoryBtn');
+    const importInput = document.getElementById('importHistoryInput');
+    const clearBtn = document.getElementById('clearHistoryBtn');
 
-    let currentFilter = 'all';
-    let searchQuery = '';
     const STORAGE_KEY = 'divination_history';
     const HISTORY_VERSION = 1;
-    const MAX_RECORDS = 200;
-    const MAX_NOTES_LENGTH = 500;
+    const MAX_ID_LENGTH = 100;
+    const MAX_TEXT_LENGTH = 500;
+    const DELETE_ICON = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>';
 
-    // 初始化
+    let range = 'all';
+    let query = '';
+    let dataFailed = false;
+
     function init() {
-        try {
-            initFilters();
-            initSearch();
-            initExportClear();
-            updateHistoryDisplay();
-            updateStats();
+        searchInput?.addEventListener('input', YizhiApp.utils.debounce(() => {
+            query = searchInput.value.trim().toLowerCase();
+            render();
+        }, 150));
 
-            YizhiApp.events.on('hexagram-data:ready', () => {
-                updateHistoryDisplay();
-                updateStats();
-            });
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'History Module Init');
-        }
-    }
-
-    // 激活时的操作
-    function onActivate() {
-        updateHistoryDisplay();
-        updateStats();
-    }
-
-    // 初始化筛选器
-    function initFilters() {
-        filterButtons.forEach(button => {
+        rangeButtons.forEach((button) => {
             button.addEventListener('click', () => {
-                const filter = button.getAttribute('data-filter');
-
-                // 更新按钮状态
-                filterButtons.forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-
-                // 更新当前筛选器
-                currentFilter = filter;
-
-                // 重新加载历史记录
-                updateHistoryDisplay();
+                range = button.dataset.range;
+                rangeButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+                render();
             });
         });
+
+        list?.addEventListener('click', handleListClick);
+        exportBtn?.addEventListener('click', exportHistory);
+        importBtn?.addEventListener('click', () => importInput?.click());
+        importInput?.addEventListener('change', importHistory);
+        clearBtn?.addEventListener('click', clearHistory);
+
+        YizhiApp.events.on('hexagram-data:error', () => {
+            dataFailed = true;
+            render();
+        });
+
+        render();
+        YizhiApp.whenDataReady(render);
     }
 
-    // 初始化搜索
-    function initSearch() {
-        if (historySearchInput) {
-            historySearchInput.addEventListener('input', YizhiApp.utils.debounce((e) => {
-                searchQuery = e.target.value.trim();
-                updateHistoryDisplay();
-            }, 300));
-        }
+    function onActivate() {
+        render();
     }
 
-    // 初始化导出和清空按钮
-    function initExportClear() {
-        exportHistoryBtn?.addEventListener('click', exportHistory);
-        clearHistoryBtn?.addEventListener('click', clearHistory);
+    function dataService() {
+        const data = YizhiApp.getModule('hexagramData');
+        return data?.isInitialized ? data : null;
     }
 
-    // 添加历史记录
-    function addRecord(record) {
-        try {
-            const normalizedRecord = normalizeRecord(record, { allowGeneratedTimestamp: true });
-            if (!normalizedRecord) {
-                throw new Error('History record does not match the canonical schema.');
-            }
-
-            let history = getHistoryRecords();
-            history.unshift(normalizedRecord);
-
-            // 限制历史记录数量
-            if (history.length > MAX_RECORDS) {
-                history = history.slice(0, MAX_RECORDS);
-            }
-
-            persistRecords(history);
-            updateHistoryDisplay();
-            updateStats();
-            return true;
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Add History Record');
-            return false;
-        }
+    function cleanText(value, maxLength) {
+        if (typeof value !== 'string') return '';
+        return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, maxLength);
     }
 
-    // 获取历史记录
-    function getHistoryRecords() {
-        const dataService = YizhiApp.getModule('hexagramData');
-        if (!dataService?.isInitialized) return [];
-
-        const storedRecords = YizhiApp.storage.getItem(STORAGE_KEY, []);
-        if (!Array.isArray(storedRecords)) {
-            YizhiApp.storage.setItem(STORAGE_KEY, []);
-            return [];
-        }
-
-        const records = storedRecords
-            .map(record => normalizeRecord(record))
-            .filter(Boolean)
-            .slice(0, MAX_RECORDS);
-        const encodedRecords = records.map(encodeRecord);
-
-        if (JSON.stringify(storedRecords) !== JSON.stringify(encodedRecords)) {
-            YizhiApp.storage.setItem(STORAGE_KEY, encodedRecords);
-        }
-
-        return records;
+    // 须为正数且能构造有效 Date（上限 ±8.64e15 毫秒），否则 toISOString 会抛错
+    function isValidTimestamp(value) {
+        return Number.isFinite(value) && value > 0 && Number.isFinite(new Date(value).getTime());
     }
 
-    function normalizeRecord(record, { allowGeneratedTimestamp = false } = {}) {
+    function parseTimestamp(record) {
+        const timestamp = Number(record.timestamp);
+        if (isValidTimestamp(timestamp)) return timestamp;
+        const parsed = typeof record.date === 'string' ? Date.parse(record.date.replace(' ', 'T')) : NaN;
+        return isValidTimestamp(parsed) ? parsed : 0;
+    }
+
+    // 接受 6/7/8/9 爻值，或旧版的 { value } / { type, changing }；其余返回 null
+    function decodeLine(line) {
+        const raw = typeof line === 'number' ? line : Number(line?.value);
+        if ([6, 7, 8, 9].includes(raw)) return YiCore.lineFromValue(raw);
+        if (!line || !['yin', 'yang'].includes(line.type)) return null;
+        const changing = line.changing === true;
+        return YiCore.lineFromValue(line.type === 'yang' ? (changing ? 9 : 7) : (changing ? 6 : 8));
+    }
+
+    /**
+     * 存储记录 → 运行时记录（附 canonical 卦对象）。任何字段不合法都返回 null。
+     * 有六爻时以六爻推出本卦与之卦，卦序仅用于只有卦、没有六爻的“查阅保存”记录。
+     */
+    function decodeRecord(record, data, { fallbackId = '' } = {}) {
         if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
         if (record.version !== undefined && record.version !== HISTORY_VERSION) return null;
 
-        const id = normalizeText(record.id, 100);
-        const hexagramId = Number(record.hexagramId ?? record.hexagram?.id);
-        const canonicalHexagram = YizhiApp.getModule('hexagramData')?.getHexagramById(hexagramId);
-        if (!id || !Number.isInteger(hexagramId) || !canonicalHexagram) return null;
+        const timestamp = parseTimestamp(record);
+        if (!timestamp) return null;
 
-        let timestamp = Number(record.timestamp);
-        if (!Number.isFinite(timestamp) || timestamp <= 0) {
-            timestamp = parseLegacyDate(record.date);
-        }
-        if ((!Number.isFinite(timestamp) || timestamp <= 0) && allowGeneratedTimestamp) {
-            timestamp = Date.now();
-        }
-        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+        const rawLines = Array.isArray(record.lines) ? record.lines : [];
+        if (rawLines.length !== 0 && rawLines.length !== 6) return null;
+        const lines = rawLines.map(decodeLine);
+        if (lines.some(line => line === null)) return null;
 
-        const lines = normalizeLines(record.lines);
-        if (lines === null) return null;
+        let primary = null;
+        let changed = null;
+        if (lines.length === 6) {
+            primary = data.getHexagramByBinary(YiCore.toBinary(lines));
+            if (lines.some(line => line.changing)) {
+                changed = data.getHexagramByBinary(YiCore.toBinary(YiCore.transformLines(lines)));
+            }
+        } else {
+            const hexagramId = Number(record.hexagramId ?? record.hexagram?.id);
+            primary = Number.isInteger(hexagramId) ? data.getHexagramById(hexagramId) : null;
+        }
+        if (!primary) return null;
+
+        const id = cleanText(record.id, MAX_ID_LENGTH) || fallbackId || `legacy-${timestamp}`;
+        const source = record.source === 'modal' || (record.source !== 'cast' && record.source !== 'divination' && lines.length === 0)
+            ? 'modal'
+            : 'cast';
 
         return {
             id,
             timestamp,
             date: YizhiApp.utils.formatDate(new Date(timestamp)),
-            hexagram: canonicalHexagram,
+            question: cleanText(record.question, MAX_TEXT_LENGTH),
+            notes: cleanText(record.notes, MAX_TEXT_LENGTH),
             lines,
-            notes: normalizeText(record.notes, MAX_NOTES_LENGTH),
-            source: ['divination', 'modal'].includes(record.source) ? record.source : 'divination',
-            changingLinesCount: lines.filter(line => line.changing).length
+            hexagramId: primary.id,
+            changedHexagramId: changed ? changed.id : null,
+            changingLinesCount: lines.filter(line => line.changing).length,
+            source,
+            hexagram: primary,
+            changed
         };
     }
 
+    // 运行时记录 → 存储记录：只保留引用与用户输入
     function encodeRecord(record) {
         return {
             version: HISTORY_VERSION,
             id: record.id,
             timestamp: record.timestamp,
-            hexagramId: record.hexagram.id,
-            lines: record.lines,
+            question: record.question,
             notes: record.notes,
-            source: record.source,
-            changingLinesCount: record.changingLinesCount
+            lines: record.lines.map(line => line.value),
+            hexagramId: record.hexagramId,
+            source: record.source
         };
     }
 
-    function persistRecords(records) {
-        YizhiApp.storage.setItem(STORAGE_KEY, records.map(encodeRecord));
+    function saveRecords(records) {
+        const limited = records.slice(0, YizhiApp.config.history.maxRecords);
+        YizhiApp.storage.setItem(STORAGE_KEY, limited.map(encodeRecord));
     }
 
-    function normalizeText(value, maxLength) {
-        if (typeof value !== 'string') return '';
-        return value.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, maxLength);
-    }
+    /**
+     * 数据服务就绪前返回空数组且不触碰存储，避免把尚无法校验的记录误清掉。
+     * 就绪后解码全部记录；若清理或迁移改变了内容，立即回写为 v1 结构。
+     */
+    function getHistoryRecords() {
+        const data = dataService();
+        if (!data) return [];
 
-    function parseLegacyDate(value) {
-        if (typeof value !== 'string' || value.trim() === '') return 0;
-        const timestamp = Date.parse(value.replace(' ', 'T'));
-        return Number.isNaN(timestamp) ? 0 : timestamp;
-    }
-
-    function normalizeLines(lines) {
-        if (!Array.isArray(lines) || lines.length > 6) return null;
-        const normalized = [];
-
-        for (const line of lines) {
-            if (!line || !['yin', 'yang'].includes(line.type) || typeof line.changing !== 'boolean') {
-                return null;
-            }
-            normalized.push({
-                type: line.type,
-                changing: line.changing,
-                name: normalizeText(line.name, 20)
-            });
-        }
-        return normalized;
-    }
-
-    // 获取筛选后的历史记录
-    function getFilteredRecords() {
-        try {
-            let allRecords = getHistoryRecords();
-
-            // 应用时间筛选
-            if (currentFilter !== 'all') {
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() - now.getDay());
-                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-                allRecords = allRecords.filter(record => {
-                    const recordDate = new Date(record.timestamp);
-
-                    switch (currentFilter) {
-                        case 'today':
-                            return recordDate >= today;
-                        case 'week':
-                            return recordDate >= weekStart;
-                        case 'month':
-                            return recordDate >= monthStart;
-                        default:
-                            return true;
-                    }
-                });
-            }
-
-            // 应用搜索筛选
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                allRecords = allRecords.filter(record => {
-                    return record.hexagram.name.toLowerCase().includes(query) ||
-                           record.hexagram.explanation.toLowerCase().includes(query) ||
-                           (record.notes && record.notes.toLowerCase().includes(query));
-                });
-            }
-
-            return allRecords;
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Get Filtered Records');
+        const stored = YizhiApp.storage.getItem(STORAGE_KEY, []);
+        if (!Array.isArray(stored)) {
+            YizhiApp.storage.setItem(STORAGE_KEY, []);
             return [];
         }
+
+        const seen = new Set();
+        const records = [];
+        stored.forEach((item) => {
+            const record = decodeRecord(item, data);
+            if (!record || seen.has(record.id)) return;
+            seen.add(record.id);
+            records.push(record);
+        });
+        records.sort((a, b) => b.timestamp - a.timestamp);
+
+        const limited = records.slice(0, YizhiApp.config.history.maxRecords);
+        const encoded = limited.map(encodeRecord);
+        if (JSON.stringify(stored) !== JSON.stringify(encoded)) {
+            YizhiApp.storage.setItem(STORAGE_KEY, encoded);
+        }
+        return limited;
     }
 
-    // 删除历史记录
+    function addRecord(input) {
+        try {
+            const data = dataService();
+            if (!data) throw new Error('卦象数据尚未就绪，无法保存占记。');
+            const record = decodeRecord({ ...input, id: YizhiApp.utils.generateId() }, data);
+            if (!record) throw new Error('占记不符合 canonical 结构，已拒绝保存。');
+
+            saveRecords([record, ...getHistoryRecords()]);
+            render();
+            return record;
+        } catch (error) {
+            YizhiApp.errors.handle(error, '保存占记');
+            return null;
+        }
+    }
+
     function deleteRecord(id) {
-        try {
-            let history = getHistoryRecords();
-            history = history.filter(record => record.id !== id);
-            persistRecords(history);
-            updateHistoryDisplay();
-            updateStats();
+        const records = getHistoryRecords();
+        const index = records.findIndex(record => record.id === id);
+        if (index < 0) return;
 
-            YizhiApp.getModule('notification')?.show('info', '删除成功', '历史记录已删除。');
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Delete History Record');
-        }
-    }
+        const [removed] = records.splice(index, 1);
+        saveRecords(records);
+        render();
 
-    // 更新历史记录显示
-    function updateHistoryDisplay() {
-        if (!historyList) return;
-
-        try {
-            const records = getFilteredRecords();
-
-            if (records.length === 0) {
-                historyList.innerHTML = createEmptyState();
-                return;
-            }
-
-            const fragment = document.createDocumentFragment();
-            records.forEach(record => {
-                const historyItem = createHistoryItem(record);
-                fragment.appendChild(historyItem);
-            });
-
-            historyList.innerHTML = '';
-            historyList.appendChild(fragment);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Update History Display');
-        }
-    }
-
-    // 创建空状态
-    function createEmptyState() {
-        return `
-            <div class="empty-history">
-                <svg class="empty-icon" viewBox="0 0 24 24">
-                    <path d="M13,3C9.1,3,6,6.1,6,10h1.6L5,13.5L2.4,10H4c0-5,4-9,9-9s9,4,9,9s-4,9-9,9c-2.4,0-4.6-0.9-6.3-2.6L5.3,17.8C7.5,20.1,10.1,21,13,21c5.5,0,10-4.5,10-10S18.5,3,13,3z"></path>
-                </svg>
-                <h3>暂无历史记录</h3>
-                <p>${searchQuery ? '没有找到匹配的记录' : '您还没有保存任何占卜记录'}</p>
-                ${!searchQuery ? '<button class="btn btn-primary" onclick="document.querySelector(\'[data-section=divination]\').click()">开始占卜</button>' : ''}
-            </div>
-        `;
-    }
-
-    // 创建历史记录项
-    function createHistoryItem(record) {
-        const historyItem = document.createElement('div');
-        historyItem.className = 'history-item';
-
-        const changingText = record.changingLinesCount > 0
-            ? `<span class="changing-indicator">${record.changingLinesCount}变</span>`
-            : '';
-
-        historyItem.innerHTML = `
-            <div class="history-item-content">
-                <div class="history-date"></div>
-                <div class="history-item-header">
-                    <div class="history-hexagram-name"></div>
-                    <div class="history-unicode"></div>
-                </div>
-                <div class="history-text"></div>
-                ${changingText}
-                <div class="history-actions">
-                    <button class="history-action view-action tooltip" data-tooltip="查看详情" aria-label="查看详情">
-                        <svg class="icon icon-sm" viewBox="0 0 24 24">
-                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path>
-                        </svg>
-                    </button>
-                    <button class="history-action delete-action tooltip" data-tooltip="删除记录" aria-label="删除记录">
-                        <svg class="icon icon-sm" viewBox="0 0 24 24">
-                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `;
-
-        historyItem.querySelector('.history-date').textContent = record.date;
-        historyItem.querySelector('.history-hexagram-name').textContent = record.hexagram.name;
-        historyItem.querySelector('.history-unicode').textContent = record.hexagram.unicode || '';
-        historyItem.querySelector('.history-text').textContent = record.hexagram.explanation;
-
-        if (record.notes) {
-            const notes = document.createElement('div');
-            notes.className = 'history-notes';
-            notes.textContent = record.notes;
-            historyItem.querySelector('.history-actions').before(notes);
-        }
-
-        // 绑定事件
-        const viewBtn = historyItem.querySelector('.view-action');
-        const deleteBtn = historyItem.querySelector('.delete-action');
-
-        viewBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            YizhiApp.getModule('modal')?.show(record.hexagram);
-        });
-
-        deleteBtn?.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const confirmed = await YizhiApp.confirm.show(
-                '确认删除',
-                '确定要删除这条历史记录吗？',
-                { danger: true }
-            );
-            if (confirmed) {
-                deleteRecord(record.id);
+        YizhiApp.toast('info', '已删除一条占记', {
+            action: {
+                label: '撤销',
+                handler: () => {
+                    const current = getHistoryRecords().filter(record => record.id !== removed.id);
+                    current.splice(Math.min(index, current.length), 0, removed);
+                    saveRecords(current);
+                    render();
+                }
             }
         });
-
-        // 点击整个记录项查看详情
-        historyItem.addEventListener('click', () => {
-            YizhiApp.getModule('modal')?.show(record.hexagram);
-        });
-
-        return historyItem;
     }
 
-    // 更新统计信息
-    function updateStats() {
-        try {
-            const allRecords = getHistoryRecords();
-            const now = new Date();
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay());
+    function inRange(record) {
+        if (range === 'all') return true;
+        const { utils } = YizhiApp;
+        const start = range === 'today' ? utils.startOfDay() : range === 'week' ? utils.startOfWeek() : utils.startOfMonth();
+        return record.timestamp >= start.getTime();
+    }
 
-            const weekRecords = allRecords.filter(record => {
-                return new Date(record.timestamp) >= weekStart;
-            });
+    function matches(record) {
+        if (!query) return true;
+        return [record.question, record.notes, record.hexagram.name, record.changed?.name, record.hexagram.explanation]
+            .some(text => (text || '').toLowerCase().includes(query));
+    }
 
-            const changingRecords = allRecords.filter(record => {
-                return record.changingLinesCount > 0;
-            });
+    // 空态与提示均为静态文案，可安全使用 innerHTML
+    function renderEmpty(title, text, withLink = false) {
+        list.innerHTML = `
+            <li class="empty">
+                <p class="empty-title">${title}</p>
+                <p>${text}</p>
+                ${withLink ? '<a class="btn btn-primary" href="#cast">去起卦</a>' : ''}
+            </li>`;
+    }
 
-            if (totalRecords) totalRecords.textContent = allRecords.length;
-            if (thisWeekRecords) thisWeekRecords.textContent = weekRecords.length;
-            if (changingLines) changingLines.textContent = changingRecords.length;
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Update Stats');
+    function render() {
+        if (!list) return;
+
+        if (!dataService()) {
+            summary.textContent = '';
+            if (exportBtn) exportBtn.disabled = true;
+            if (clearBtn) clearBtn.disabled = true;
+            if (dataFailed) {
+                renderEmpty('卦象数据加载失败', '占记需要卦象数据才能校验与显示，请刷新页面重试。');
+            } else {
+                list.innerHTML = `<li class="empty">${YizhiApp.ui.spinner('载入占记')}</li>`;
+            }
+            return;
+        }
+
+        const records = getHistoryRecords();
+        const weekStart = YizhiApp.utils.startOfWeek().getTime();
+        const thisWeek = records.filter(record => record.timestamp >= weekStart).length;
+        const changing = records.filter(record => record.changingLinesCount > 0).length;
+
+        if (exportBtn) exportBtn.disabled = records.length === 0;
+        if (clearBtn) clearBtn.disabled = records.length === 0;
+
+        if (records.length === 0) {
+            summary.textContent = '';
+            renderEmpty('还没有占记', '成卦后点“保存到占记”，就会出现在这里。', true);
+            return;
+        }
+
+        const visible = records.filter(record => inRange(record) && matches(record));
+        const filtered = visible.length !== records.length ? `，当前显示 ${visible.length} 条` : '';
+        summary.textContent = `共 ${records.length} 条 · 本周 ${thisWeek} 条 · 含变爻 ${changing} 条${filtered}`;
+
+        if (visible.length === 0) {
+            renderEmpty('没有符合条件的占记', '换个关键词或时间范围试试。');
+            return;
+        }
+
+        list.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        visible.forEach(record => fragment.appendChild(itemNode(record)));
+        list.appendChild(fragment);
+    }
+
+    function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    }
+
+    function itemNode(record) {
+        const { ui, utils } = YizhiApp;
+        const primary = record.hexagram;
+        const changed = record.changed;
+        const bits = record.lines.length === 6
+            ? record.lines.map(line => (line.type === 'yang' ? 1 : 0))
+            : YiCore.binaryToBits(primary.binary);
+        const changingPositions = record.lines.length === 6 ? YiCore.changingPositions(record.lines) : [];
+        const text = record.question || record.notes;
+
+        const item = el('li', 'history-item');
+        const open = el('button', 'history-open');
+        open.setAttribute('type', 'button');
+        open.setAttribute('data-open-record', record.id);
+
+        // 卦画由已校验的六爻/卦序生成，不含任何持久化文本
+        const figures = el('span', 'history-figures');
+        figures.innerHTML = ui.figure(bits, { size: 'sm', changing: changingPositions });
+
+        const main = el('span', 'history-main');
+        const names = el('span', 'history-names', primary.name);
+        if (changed) {
+            names.appendChild(el('span', 'of', '之'));
+            names.appendChild(document.createTextNode(changed.name));
+        }
+        main.appendChild(names);
+        main.appendChild(el('span', `history-question${text ? '' : ' is-empty'}`, text || '未记所问'));
+
+        const meta = el('span', 'history-meta');
+        const time = el('time', '', utils.formatRelative(record.timestamp));
+        time.setAttribute('datetime', new Date(record.timestamp).toISOString());
+        time.setAttribute('title', record.date);
+        meta.appendChild(time);
+        const badgeText = record.source === 'modal'
+            ? '查阅'
+            : (record.changingLinesCount ? `${record.changingLinesCount} 爻变` : '安静');
+        meta.appendChild(el('span', `badge${record.source !== 'modal' && record.changingLinesCount ? ' badge-changing' : ''}`, badgeText));
+
+        open.appendChild(figures);
+        open.appendChild(main);
+        open.appendChild(meta);
+
+        const remove = el('button', 'icon-btn history-delete');
+        remove.setAttribute('type', 'button');
+        remove.setAttribute('data-delete-record', record.id);
+        remove.setAttribute('aria-label', `删除 ${primary.name} 这条占记`);
+        remove.innerHTML = DELETE_ICON;
+
+        item.appendChild(open);
+        item.appendChild(remove);
+        return item;
+    }
+
+    function handleListClick(event) {
+        const deleteId = event.target.closest('[data-delete-record]')?.getAttribute('data-delete-record');
+        if (deleteId) {
+            deleteRecord(deleteId);
+            return;
+        }
+
+        const openId = event.target.closest('[data-open-record]')?.getAttribute('data-open-record');
+        if (!openId) return;
+        const record = getHistoryRecords().find(item => item.id === openId);
+        if (!record) return;
+
+        // 起卦记录回到起卦页完整重读；“查阅保存”的记录只有卦，没有六爻
+        if (record.lines.length === 6) {
+            YizhiApp.getModule('cast')?.loadRecord(record);
+        } else {
+            YizhiApp.getModule('modal')?.show(record.hexagramId);
         }
     }
 
-    // 导出历史记录
     function exportHistory() {
+        const records = getHistoryRecords();
+        if (records.length === 0) return;
+        YizhiApp.utils.downloadJson(`易之占记_${YizhiApp.utils.formatDate(new Date(), 'YYYYMMDD-HHmmss')}.json`, {
+            exported_at: YizhiApp.utils.formatDate(new Date()),
+            version: YizhiApp.config.version,
+            history_version: HISTORY_VERSION,
+            total_records: records.length,
+            records: records.map(encodeRecord)
+        });
+        YizhiApp.toast('success', `已导出 ${records.length} 条占记`);
+    }
+
+    async function importHistory() {
+        const file = importInput.files?.[0];
+        importInput.value = '';
+        if (!file) return;
+
+        const data = dataService();
+        if (!data) {
+            YizhiApp.toast('error', '卦象数据尚未就绪，请稍后再导入');
+            return;
+        }
+
         try {
-            const records = getHistoryRecords();
-            if (records.length === 0) {
-                YizhiApp.getModule('notification')?.show('info', '无数据', '没有历史记录可以导出。');
+            const parsed = JSON.parse(await file.text());
+            const incoming = (Array.isArray(parsed) ? parsed : parsed?.records || [])
+                .map(record => decodeRecord(record, data))
+                .filter(Boolean);
+
+            if (incoming.length === 0) {
+                YizhiApp.toast('error', '文件中没有可识别的占记');
                 return;
             }
 
-            const exportData = {
-                exported_at: YizhiApp.utils.formatDate(new Date()),
-                version: YizhiApp.config.version,
-                total_records: records.length,
-                records: records
-            };
+            const existing = getHistoryRecords();
+            const known = new Set(existing.map(record => record.id));
+            const added = incoming.filter(record => !known.has(record.id) && known.add(record.id));
+            const merged = [...existing, ...added].sort((a, b) => b.timestamp - a.timestamp);
+            saveRecords(merged);
+            render();
 
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(dataBlob);
-            link.download = `易之历史记录_${YizhiApp.utils.formatDate(new Date(), 'YYYY-MM-DD_HH-mm-ss')}.json`;
-            link.click();
-
-            URL.revokeObjectURL(link.href);
-
-            YizhiApp.getModule('notification')?.show('success', '导出成功',
-                `已导出 ${records.length} 条历史记录。`);
+            const skipped = incoming.length - added.length;
+            YizhiApp.toast('success', `导入 ${added.length} 条${skipped ? `，跳过重复 ${skipped} 条` : ''}`);
         } catch (error) {
-            YizhiApp.errors.handle(error, 'Export History');
+            YizhiApp.errors.handle(error, '导入占记', '导入失败：文件不是有效的易之占记备份。');
         }
     }
 
-    // 清空历史记录
     async function clearHistory() {
-        try {
-            const confirmed = await YizhiApp.confirm.show(
-                '确认清空',
-                '确定要清空所有历史记录吗？此操作不可恢复。',
-                { danger: true, okText: '清空全部' }
-            );
+        const count = getHistoryRecords().length;
+        if (count === 0) return;
+        const confirmed = await YizhiApp.dialogs.confirm(
+            `清空全部 ${count} 条占记？`,
+            '此操作无法撤销。如需保留，请先导出备份。',
+            { okText: '清空', danger: true }
+        );
+        if (!confirmed) return;
 
-            if (confirmed) {
-                YizhiApp.storage.removeItem(STORAGE_KEY);
-                updateHistoryDisplay();
-                updateStats();
-
-                YizhiApp.getModule('notification')?.show('success', '清空成功',
-                    '所有历史记录已被清空。');
-            }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Clear History');
-        }
+        YizhiApp.storage.removeItem(STORAGE_KEY);
+        render();
+        YizhiApp.toast('info', '占记已清空');
     }
 
     return {
@@ -464,8 +446,6 @@ const HistoryModule = (function() {
         onActivate,
         addRecord,
         getHistoryRecords,
-        deleteRecord,
-        exportHistory,
-        clearHistory
+        deleteRecord
     };
 })();

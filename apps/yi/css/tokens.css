@@ -1,0 +1,102 @@
+/*
+ * 设计令牌：宣纸、墨、朱砂
+ * 原则：纸为底、墨为文、朱只标“变”；阴影极轻，以细线分层。
+ * 对比度（正文/底色）：浅色 ink-2 ≈ 8.9、ink-3 ≈ 4.8；深色 ink-2 ≈ 9.6、ink-3 ≈ 4.9。
+ */
+:root {
+    color-scheme: light;
+
+    --paper: #f6f1e7;
+    --paper-2: #efe8da;
+    --surface: #fbf8f2;
+    --surface-sunk: #f1ebdf;
+    --ink: #22201c;
+    --ink-2: #4a453d;
+    --ink-3: #736a5d;
+    --ink-4: #b5ab9a;
+    --line: rgba(34, 32, 28, 0.12);
+    --line-strong: rgba(34, 32, 28, 0.24);
+
+    --cinnabar: #b33a2b;
+    --cinnabar-strong: #962e21;
+    --cinnabar-soft: rgba(179, 58, 43, 0.1);
+    --jade: #2f6b5a;
+    --jade-soft: rgba(47, 107, 90, 0.1);
+    --bronze-1: #cfae78;
+    --bronze-2: #9a7543;
+    --bronze-ink: #5a4122;
+
+    --on-accent: #fffaf2;
+    --focus: #b33a2b;
+    --scrim: rgba(24, 22, 19, 0.42);
+    --mark: rgba(214, 168, 64, 0.35);
+
+    --shadow-1: 0 1px 2px rgba(34, 32, 28, 0.06);
+    --shadow-2: 0 10px 30px -12px rgba(34, 32, 28, 0.22);
+
+    --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-md: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.5rem;
+    --text-2xl: 2rem;
+    --text-3xl: 2.75rem;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-full: 999px;
+
+    --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --dur-fast: 140ms;
+    --dur: 240ms;
+
+    --page-width: 1180px;
+    --topbar-height: 60px;
+    --bottom-nav-height: 0px;
+}
+
+[data-theme="dark"] {
+    color-scheme: dark;
+
+    --paper: #16140f;
+    --paper-2: #1c1a15;
+    --surface: #1f1c17;
+    --surface-sunk: #191713;
+    --ink: #ece4d4;
+    --ink-2: #c9bfad;
+    --ink-3: #9a9080;
+    --ink-4: #5d564b;
+    --line: rgba(236, 228, 212, 0.1);
+    --line-strong: rgba(236, 228, 212, 0.2);
+
+    --cinnabar: #e0705c;
+    --cinnabar-strong: #ec8570;
+    --cinnabar-soft: rgba(224, 112, 92, 0.14);
+    --jade: #74b8a0;
+    --jade-soft: rgba(116, 184, 160, 0.14);
+    --bronze-1: #b8965f;
+    --bronze-2: #7b5c33;
+    --bronze-ink: #2f2212;
+
+    --on-accent: #1a1510;
+    --focus: #e0705c;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --mark: rgba(214, 168, 64, 0.3);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+}

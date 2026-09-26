@@ -1,93 +1,116 @@
 /**
- * 主题模块 - 管理应用程序的主题
+ * 主题模块 - 深浅色切换
+ * 默认跟随系统；用户手动切换后以存储值为准（键：yizhi_theme）
+ *
+ * 切换按钮是一枚太极：每切换一次旋转半周（累计，不回转），阴阳互易即深浅互换；
+ * 支持 View Transitions 的浏览器上，新主题自按钮处如墨晕开；减少动态效果时直接切换。
  */
 const ThemeModule = (function() {
-    // 私有变量
-    const themeToggle = document.getElementById('themeToggle');
-    const rootElement = document.documentElement;
+    const toggle = document.getElementById('themeToggle');
+    const root = document.documentElement;
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     const STORAGE_KEY = 'theme';
+    const REVEAL_DURATION = 560;
+    const SPIN_LEAD = 260;
 
-    // 初始化
+    let turns = 0;
+    let pendingTheme = null;
+    let pendingTimer = null;
+
     function init() {
-        try {
-            // 检查存储中的主题设置
-            const savedTheme = YizhiApp.storage.getItem(STORAGE_KEY);
-            if (savedTheme === 'dark') {
-                rootElement.setAttribute('data-theme', 'dark');
-            }
+        const saved = YizhiApp.storage.getItem(STORAGE_KEY);
+        if (saved === 'dark' || saved === 'light') {
+            apply(saved);
+        } else {
+            apply(root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+        }
 
-            // 为主题切换按钮添加事件监听器
-            if (themeToggle) {
-                themeToggle.addEventListener('click', toggleTheme);
-                themeToggle.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleTheme();
-                    }
-                });
-            }
+        toggle?.addEventListener('click', () => {
+            setTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark', { animate: true });
+        });
 
-            // 监听系统主题变化
-            if (window.matchMedia) {
-                const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-                if (typeof mediaQuery.addEventListener === 'function') {
-                    mediaQuery.addEventListener('change', handleSystemThemeChange);
-                } else if (typeof mediaQuery.addListener === 'function') {
-                    mediaQuery.addListener(handleSystemThemeChange);
-                }
+        const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+        media?.addEventListener?.('change', (event) => {
+            const userTheme = YizhiApp.storage.getItem(STORAGE_KEY);
+            if (userTheme !== 'dark' && userTheme !== 'light') {
+                apply(event.matches ? 'dark' : 'light');
             }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Theme Module Init');
+        });
+    }
+
+    function apply(theme) {
+        root.setAttribute('data-theme', theme);
+        if (toggle) {
+            toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+            toggle.setAttribute('title', theme === 'dark' ? '切换为浅色' : '切换为深色');
+        }
+        if (themeColorMeta) {
+            themeColorMeta.setAttribute('content', getComputedStyle(root).getPropertyValue('--paper').trim() || '#f6f1e7');
         }
     }
 
-    // 切换主题
-    function toggleTheme() {
-        try {
-            const currentTheme = getCurrentTheme();
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            setTheme(newTheme);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Theme Toggle');
-        }
+    function spin() {
+        turns += 1;
+        toggle?.style.setProperty('--taiji-turns', String(turns));
     }
 
-    // 设置主题
-    function setTheme(theme) {
-        try {
-            if (theme === 'dark') {
-                rootElement.setAttribute('data-theme', 'dark');
-                YizhiApp.storage.setItem(STORAGE_KEY, 'dark');
-            } else {
-                rootElement.removeAttribute('data-theme');
-                YizhiApp.storage.setItem(STORAGE_KEY, 'light');
-            }
+    // 以按钮中心为圆心、覆盖整个视口的半径做圆形揭示
+    function reveal(update) {
+        const canAnimate = typeof document.startViewTransition === 'function' && toggle;
+        if (!canAnimate) {
+            update();
+            return;
+        }
 
-            // 触发主题变化事件
+        const rect = toggle.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+
+        const transition = document.startViewTransition(update);
+        transition.ready.then(() => {
+            root.animate(
+                { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+                { duration: REVEAL_DURATION, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)', pseudoElement: '::view-transition-new(root)' }
+            );
+        }).catch(() => {});
+    }
+
+    /**
+     * 先转太极、再晕开新主题：视图过渡的快照会冻结按钮，
+     * 故让旋转先在实时画面上走过大半，再开始揭示；连续点击以最后一次为准
+     */
+    function setTheme(theme, options = {}) {
+        pendingTheme = theme;
+        clearTimeout(pendingTimer);
+        YizhiApp.storage.setItem(STORAGE_KEY, theme);
+
+        const commit = () => {
+            pendingTimer = null;
+            apply(theme);
             YizhiApp.events.emit('theme:changed', { theme });
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Set Theme');
+        };
+
+        if (!options.animate || YizhiApp.utils.prefersReducedMotion()) {
+            if (options.animate) spin();
+            commit();
+            return;
         }
+
+        spin();
+        toggle?.setAttribute('aria-pressed', String(theme === 'dark'));
+        pendingTimer = setTimeout(() => reveal(commit), SPIN_LEAD);
     }
 
-    // 获取当前主题
+    // 过渡尚未落定时，以将要切换到的主题为准
     function getCurrentTheme() {
-        return rootElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-    }
-
-    // 处理系统主题变化
-    function handleSystemThemeChange(e) {
-        // 如果用户没有手动设置主题，则跟随系统
-        const userTheme = YizhiApp.storage.getItem(STORAGE_KEY);
-        if (!userTheme) {
-            setTheme(e.matches ? 'dark' : 'light');
-        }
+        if (pendingTimer) return pendingTheme;
+        return root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     }
 
     return {
         init,
         setTheme,
-        getCurrentTheme,
-        toggleTheme
+        getCurrentTheme
     };
 })();

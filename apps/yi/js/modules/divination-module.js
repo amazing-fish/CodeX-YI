@@ -1,698 +1,754 @@
 /**
- * 占卜模块 - 管理铜钱投掷和卦象生成
+ * 起卦模块 - 三钱起卦、成卦台与解读
+ *
+ * 所有界面都由 state 推导：lines（自下而上）决定成卦台、按钮与解读，
+ * 不再分别维护进度条、步骤条、流程看板等多份重复状态。
  */
 const DivinationModule = (function() {
-    // 私有变量
-    const throwCoinBtn = document.getElementById('throwCoinBtn');
-    const changeHexagramBtn = document.getElementById('changeHexagramBtn');
+    const panel = document.getElementById('castPanel');
+    const questionInput = document.getElementById('questionInput');
+    const stage = document.getElementById('castStage');
+    const coins = document.getElementById('coins');
+    const status = document.getElementById('castStatus');
+    const castBtn = document.getElementById('castBtn');
+    const castBtnLabel = document.getElementById('castBtnLabel');
+    const castAllBtn = document.getElementById('castAllBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const hexagramContainer = document.getElementById('hexagramContainer');
-    const hexagramNameDisplay = document.getElementById('hexagramName');
-    const hexagramUnicodeDisplay = document.getElementById('hexagramUnicode');
-    const hexagramExplanationDisplay = document.getElementById('hexagramExplanation');
-    const upperTrigramInfo = document.getElementById('upperTrigramInfo');
-    const lowerTrigramInfo = document.getElementById('lowerTrigramInfo');
-    const coinsDisplay = document.getElementById('coinsDisplay');
-    const coinsResult = document.getElementById('coinsResult');
-    const overviewContent = document.getElementById('overviewContent');
-    const detailContent = document.getElementById('detailContent');
-    const linesContent = document.getElementById('linesContent');
-    const relationsContent = document.getElementById('relationItems');
-    const progressBar = document.getElementById('progressBar');
-    const progressCount = document.getElementById('progressCount');
-    const throwSubtitle = document.getElementById('throwSubtitle');
+    const reading = document.getElementById('reading');
 
-    // 步骤指引
-    const steps = {
-        step1: document.getElementById('step1'),
-        step2: document.getElementById('step2'),
-        step3: document.getElementById('step3'),
-        step4: document.getElementById('step4')
+    const state = {
+        lines: [],
+        busy: false,
+        fast: false,
+        lastCoins: null,
+        castAt: null,
+        savedId: null,
+        fromHistory: false,
+        tab: 'primary'
     };
 
-    let lines = [];
-    let transformed = false;
-    let animationInProgress = false;
-    let throwGeneration = 0;
-    const positionCode = "010101";
+    // 每次重置或载入占记都会递增；进行中的投掷在动画结束后比对代次，已过期则放弃写入
+    let generation = 0;
+    let dataFailed = false;
+    let axis = null;
 
-    // 初始化
     function init() {
-        try {
-            bindEvents();
-            initializeUI();
+        castBtn?.addEventListener('click', () => castOnce());
+        castAllBtn?.addEventListener('click', castRemaining);
+        resetBtn?.addEventListener('click', () => reset());
 
-            // 监听卦象数据准备完成事件
-            YizhiApp.events.on('hexagram-data:ready', () => {
-                updateHexagramDisplay();
-            });
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Divination Module Init');
-        }
+        questionInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.isComposing) {
+                event.preventDefault();
+                castOnce();
+            }
+        });
+
+        document.addEventListener('keydown', handleSpace);
+        reading?.addEventListener('click', handleReadingClick);
+        reading?.addEventListener('keydown', handleTabKeys);
+
+        renderCoins(null);
+        render();
+
+        YizhiApp.events.on('hexagram-data:ready', render);
+        YizhiApp.events.on('hexagram-data:error', () => {
+            dataFailed = true;
+            render();
+        });
     }
 
-    // 绑定事件
-    function bindEvents() {
-        throwCoinBtn?.addEventListener('click', handleThrowCoins);
-        changeHexagramBtn?.addEventListener('click', toggleChangingLines);
-        resetBtn?.addEventListener('click', handleReset);
-        saveBtn?.addEventListener('click', saveToHistory);
-        exportBtn?.addEventListener('click', exportResult);
-    }
-
-    // 初始化UI
-    function initializeUI() {
-        resetDivination();
-        updateProgress(0);
-        updateStep(1);
-    }
-
-    // 激活时的处理
     function onActivate() {
-        // 检查是否有未完成的占卜
-        if (lines.length > 0 && lines.length < 6) {
-            YizhiApp.getModule('notification')?.show('info', '继续占卜',
-                `您有一个进行到第${lines.length}爻的占卜，可以继续完成。`);
+        render();
+    }
+
+    // 空格掷爻：仅在起卦页、未在输入框内、没有打开弹窗时生效
+    function handleSpace(event) {
+        if (event.key !== ' ' || event.repeat) return;
+        if (YizhiApp.router.current !== 'cast' || document.querySelector('dialog[open]')) return;
+        const target = event.target;
+        if (target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]')
+            || (target.closest('button, a') && target !== castBtn))) {
+            return;
+        }
+        if (state.lines.length >= 6) return;
+        event.preventDefault();
+        castOnce();
+    }
+
+    function motionDuration() {
+        if (YizhiApp.utils.prefersReducedMotion()) return 0;
+        return state.fast ? 360 : YizhiApp.config.motion.coinFlip;
+    }
+
+    async function castOnce() {
+        if (state.busy || state.lines.length >= 6) return;
+        if (state.lines.length === 0) {
+            state.castAt = Date.now();
+        }
+
+        state.busy = true;
+        const ticket = generation;
+        const tossed = YiCore.tossCoins();
+        const line = YiCore.lineFromCoins(tossed);
+        const duration = motionDuration();
+
+        renderControls();
+        renderCoins(tossed, duration);
+        turnAxis(state.lines.length + 1, duration);
+        if (duration > 0) {
+            status.textContent = '铜钱落定中…';
+            await YizhiApp.utils.delay(duration + 120);
+        }
+        if (ticket !== generation) return;
+
+        state.lines.push(line);
+        state.lastCoins = tossed;
+        state.busy = false;
+        render({ newPosition: state.lines.length });
+
+        if (state.lines.length === 6) {
+            requestAnimationFrame(onComplete);
         }
     }
 
-    // 处理投掷铜钱
-    async function handleThrowCoins() {
-        if (animationInProgress || lines.length >= 6) return;
-
-        const generation = throwGeneration;
-
+    async function castRemaining() {
+        if (state.busy) return;
+        state.fast = true;
+        const ticket = generation;
         try {
-            animationInProgress = true;
-            throwCoinBtn.disabled = true;
-
-            updateStep(1);
-            const completed = await throwThreeCoins(generation);
-            if (!completed) return;
-
-            updateProgress((lines.length / 6) * 100);
-            updateProgressCount();
-            updateThrowButtonText();
-
-            if (lines.length >= 3) {
-                updateStep(2);
+            while (state.lines.length < 6 && ticket === generation) {
+                await castOnce();
             }
-
-            if (lines.length === 6) {
-                handleDivinationComplete();
-            }
-
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Throw Coins');
         } finally {
-            if (generation === throwGeneration) {
-                animationInProgress = false;
-                if (lines.length < 6) {
-                    throwCoinBtn.disabled = false;
-                }
-            }
+            state.fast = false;
         }
     }
 
-    // 投掷三枚铜钱
-    function throwThreeCoins(generation) {
-        return new Promise((resolve) => {
-            // 清空上一次的铜钱显示
-            if (coinsDisplay) {
-                coinsDisplay.innerHTML = '';
+    const CN_ORDINAL = ['一', '二', '三', '四', '五', '六'];
+
+    function dataService() {
+        return YizhiApp.getModule('hexagramData');
+    }
+
+    function render(options = {}) {
+        renderStage(options.newPosition || 0);
+        renderControls();
+        renderStatus();
+        renderReading();
+    }
+
+    function renderCoins(tossed, duration = 0) {
+        if (!coins) return;
+        const faces = tossed || [false, false, false];
+        coins.innerHTML = faces.map((isBack, index) => {
+            const tossing = tossed && duration > 0;
+            const style = tossing ? ` style="--toss-duration:${duration}ms;--toss-delay:${index * 70}ms"` : '';
+            const value = tossed ? `${isBack ? '背' : '字'} ${YiCore.coinValue(isBack)}` : '';
+            return `
+                <span class="coin-slot${tossing ? ' is-tossing' : ''}">
+                    <span class="coin${isBack ? '' : ' is-face'}${tossing ? ' is-tossing' : ''}"${style}>
+                        <span class="coin-side coin-back"></span>
+                        <span class="coin-side coin-face"><span>易</span><span>之</span><span>通</span><span>宝</span></span>
+                    </span>
+                    <span class="coin-value">${value}</span>
+                </span>`;
+        }).join('');
+    }
+
+    // 自上而下的三爻（如 [6,5,4]）→ 八卦名
+    function trigramOf(positions) {
+        const lines = positions.map(position => state.lines[position - 1]);
+        const data = dataService();
+        if (lines.some(line => !line) || !data?.isInitialized) return null;
+        const binary = lines.map(line => (line.type === 'yang' ? '1' : '0')).join('');
+        const entry = Object.entries(data.getBaguaData()).find(([, item]) => item.binary === binary);
+        return entry ? { name: entry[0], ...entry[1] } : null;
+    }
+
+    function stageRow(position, newPosition) {
+        const line = state.lines[position - 1];
+        const isNext = !line && position === state.lines.length + 1;
+        const rowClasses = ['stage-row'];
+        const yaoClasses = ['yao'];
+        let label = YiCore.POSITION_NAMES[position - 1];
+        let meta = '';
+        let place = '';
+
+        if (line) {
+            const yang = line.type === 'yang';
+            const proper = yang === (position % 2 === 1);
+            place = `<span class="stage-place${proper ? '' : ' is-off'}" title="${yang ? '阳' : '阴'}爻居${position % 2 === 1 ? '阳' : '阴'}位">${proper ? '当位' : '失位'}</span>`;
+            label = YiCore.lineTitle(position, line.type === 'yang');
+            yaoClasses.push(line.type === 'yang' ? 'is-yang' : 'is-yin');
+            if (line.changing) {
+                rowClasses.push('is-changing');
+                yaoClasses.push('is-changing');
             }
-
-            // 创建三个铜钱
-            const coinElements = [];
-            for (let i = 0; i < 3; i++) {
-                const coin = createCoinElement();
-                coinElements.push(coin);
-                coinsDisplay?.appendChild(coin);
+            if (position === newPosition) yaoClasses.push('is-new');
+            const mark = line.changing
+                ? ` <span aria-hidden="true">${line.type === 'yang' ? '○' : '×'}</span><span class="visually-hidden">，变爻</span>`
+                : '';
+            meta = `${line.name} ${line.value}${mark}`;
+        } else {
+            yaoClasses.push('is-empty');
+            if (isNext) {
+                rowClasses.push('is-next');
+                yaoClasses.push('is-active');
+                meta = '待掷';
             }
+        }
 
-            // 延迟开始动画
-            setTimeout(() => {
-                if (generation !== throwGeneration) {
-                    resolve(false);
-                    return;
-                }
+        return `
+            <div class="${rowClasses.join(' ')}" data-position="${position}">
+                <span class="stage-pos">${label}</span>
+                <span class="${yaoClasses.join(' ')}"></span>
+                <span class="stage-meta">${meta}</span>
+                ${place || '<span class="stage-place" aria-hidden="true"></span>'}
+            </div>`;
+    }
 
-                const results = [];
+    const STAGE_GROUPS = [
+        { name: '上卦', positions: [6, 5, 4] },
+        { name: '下卦', positions: [3, 2, 1] }
+    ];
 
-                coinElements.forEach((coin, index) => {
-                    const isHeads = Math.random() < 0.5;
-                    const finalRotation = isHeads ? '0deg' : '180deg';
+    /**
+     * 成卦台骨架只建一次：上卦 / 太极轴 / 下卦。
+     * 太极轴常驻 DOM，才能让“每成一爻转六十度、六爻成卦转满一周”的过渡连续进行。
+     */
+    function buildStage() {
+        if (!stage) return;
+        stage.innerHTML = `
+            <div class="stage-group" role="group" aria-label="上卦" data-group="0"></div>
+            <div class="stage-axis" aria-hidden="true">${YizhiApp.ui.taiji()}</div>
+            <div class="stage-group" role="group" aria-label="下卦" data-group="1"></div>`;
+        axis = stage.querySelector('.stage-axis');
+    }
 
-                    results.push(isHeads ? 3 : 2);
+    // 太极随爻数转动；转动时长与铜钱翻落同步，减少动态效果时直接落位
+    function turnAxis(count, duration) {
+        if (!axis) return;
+        axis.style.setProperty('--axis-turn', `${count * 60}deg`);
+        axis.style.setProperty('--axis-duration', `${Math.max(duration, 320)}ms`);
+        // 掷第六爻途中不提前亮起成卦光环，待铜钱落定后由 renderStage 设置
+        if (!state.busy) axis.classList.toggle('is-complete', count === 6);
+    }
 
-                    coin.classList.add('flipping');
-                    coin.style.setProperty('--final-rotation', finalRotation);
+    function renderStage(newPosition) {
+        if (!stage) return;
+        if (!axis) buildStage();
+
+        STAGE_GROUPS.forEach((group, index) => {
+            const trigram = trigramOf(group.positions);
+            const caption = trigram ? `<strong>${trigram.name} · ${trigram.nature}</strong>` : '';
+            stage.querySelector(`[data-group="${index}"]`).innerHTML = `
+                <div class="stage-caption"><span>${group.name}</span>${caption}</div>
+                ${group.positions.map(position => stageRow(position, newPosition)).join('')}`;
+        });
+
+        if (!state.busy) turnAxis(state.lines.length, YizhiApp.config.motion.lineSettle);
+    }
+
+    function renderControls() {
+        const count = state.lines.length;
+        const done = count === 6;
+
+        panel?.classList.toggle('is-complete', done);
+        castBtn.hidden = done;
+        castAllBtn.hidden = done;
+        castBtn.disabled = state.busy;
+        castAllBtn.disabled = state.busy;
+        castBtnLabel.textContent = done ? '已成卦' : `掷第${CN_ORDINAL[count]}爻`;
+        castAllBtn.textContent = count === 0 ? '一次成卦' : '掷完余下各爻';
+
+        resetBtn.hidden = count === 0;
+        resetBtn.disabled = state.busy;
+        resetBtn.textContent = done ? '再起一卦' : '重来';
+        resetBtn.classList.toggle('btn-ghost', !done);
+
+        if (questionInput) {
+            questionInput.readOnly = done;
+        }
+    }
+
+    function renderStatus() {
+        if (!status || state.busy) return;
+        const count = state.lines.length;
+
+        if (count === 0) {
+            status.textContent = '静心默念所问，掷六次成卦。';
+            return;
+        }
+
+        const last = state.lines[count - 1];
+        if (!state.lastCoins) {
+            status.textContent = state.castAt
+                ? `取自占记 · ${YizhiApp.utils.formatDate(new Date(state.castAt), 'YYYY-MM-DD HH:mm')}`
+                : '取自占记';
+            return;
+        }
+
+        const sum = state.lastCoins.map(isBack => YiCore.coinValue(isBack)).join(' + ');
+        const changing = last.changing ? '<span class="mark-changing">，变</span>' : '';
+        status.innerHTML = `第${CN_ORDINAL[count - 1]}爻：${sum} = ${last.value}，<strong>${last.name}</strong>${changing}`;
+    }
+
+    const esc = value => YizhiApp.utils.escapeHtml(value);
+
+    function renderReading() {
+        if (!reading) return;
+
+        if (state.lines.length < 6) {
+            reading.innerHTML = introHtml();
+            return;
+        }
+
+        const data = dataService();
+        if (!data?.isInitialized) {
+            reading.innerHTML = dataFailed
+                ? '<div class="panel empty"><p class="empty-title">卦象数据加载失败</p><p>卦已成，但暂时无法读取卦文，请检查网络后刷新页面。</p></div>'
+                : `<div class="panel">${YizhiApp.ui.spinner('正在载入卦文')}</div>`;
+            return;
+        }
+
+        const model = buildModel();
+        reading.innerHTML = model.primary ? readingHtml(model) : '';
+    }
+
+    function introHtml() {
+        const count = state.lines.length;
+        const changingCount = state.lines.filter(line => line.changing).length;
+        const lower = trigramOf([3, 2, 1]);
+        const heading = count === 0 ? '三钱起卦' : '卦将成';
+        const lead = count === 0
+            ? '取三枚铜钱，背记三、字记二。每掷一次，三钱之和定一爻；自下而上掷六次成卦。'
+            : `已得 ${count} 爻${changingCount ? `，其中变爻 ${changingCount} 个` : ''}。${lower ? `下卦为${lower.name}（${lower.nature}），` : ''}再掷 ${6 - count} 次成卦。`;
+
+        return `
+            <section class="panel reading-intro" aria-labelledby="introTitle">
+                <div>
+                    <h2 id="introTitle">${heading}</h2>
+                    <p>${lead}</p>
+                </div>
+                <dl class="value-table">
+                    <div><dt>九</dt><dd>老阳 · 阳变阴 <span class="mark-changing">○</span></dd></div>
+                    <div><dt>七</dt><dd>少阳 · 不变</dd></div>
+                    <div><dt>八</dt><dd>少阴 · 不变</dd></div>
+                    <div><dt>六</dt><dd>老阴 · 阴变阳 <span class="mark-changing">×</span></dd></div>
+                </dl>
+                <p>六爻成后，这里会给出本卦与之卦，并按变爻多少指出应当细读的卦辞或爻辞。</p>
+            </section>`;
+    }
+
+    function buildModel() {
+        const data = dataService();
+        const guide = YiCore.readingGuide(state.lines);
+        const primary = data.getHexagramByBinary(YiCore.toBinary(state.lines));
+        const changed = guide.count > 0
+            ? data.getHexagramByBinary(YiCore.toBinary(YiCore.transformLines(state.lines)))
+            : null;
+        return { guide, primary, changed };
+    }
+
+    function readingHtml(model) {
+        const { primary, changed, guide } = model;
+        const question = questionInput?.value.trim() || '';
+        const when = state.castAt ? YizhiApp.utils.formatDate(new Date(state.castAt), 'YYYY-MM-DD HH:mm') : '';
+        const title = changed ? `${primary.name}之${changed.name}` : `${primary.name}，六爻安静`;
+        const arrow = '<span class="pair-arrow" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
+
+        return `
+            <article class="reading-result" aria-labelledby="readingTitle">
+                <header class="reading-head">
+                    <h2 class="visually-hidden" id="readingTitle" tabindex="-1">卦成：${esc(title)}</h2>
+                    <p class="reading-eyebrow">
+                        ${when ? `<span>${when}</span>` : ''}
+                        ${state.fromHistory ? '<span class="badge">取自占记</span>' : ''}
+                        <span class="badge${guide.count ? ' badge-changing' : ''}">${guide.count ? `${guide.count} 爻变` : '六爻安静'}</span>
+                    </p>
+                    ${question ? `<p class="reading-question">${esc(question)}</p>` : ''}
+                    <div class="pair${changed ? '' : ' is-single'}">
+                        ${pairCard(primary, '本卦', { changing: guide.changing })}
+                        ${changed ? arrow + pairCard(changed, '之卦', { moved: guide.changing }) : ''}
+                    </div>
+                </header>
+                ${guideHtml(model)}
+                ${studyHtml(model)}
+                ${footerHtml()}
+            </article>`;
+    }
+
+    function pairCard(hexagram, tag, options) {
+        const figure = YizhiApp.ui.figureFromBinary(hexagram.binary, {
+            size: 'md',
+            changing: options.changing || [],
+            moved: options.moved || []
+        });
+        return `
+            <button class="pair-card" type="button" data-open-hexagram="${hexagram.id}"
+                aria-label="${tag}：${esc(hexagram.fullName)}，${esc(hexagram.explanation)}。查看全文">
+                ${figure}
+                <span class="pair-text">
+                    <span class="pair-tag">${tag} · 第 ${hexagram.id} 卦</span>
+                    <span class="pair-name">${esc(hexagram.name)}</span>
+                    <span class="pair-full">${esc(hexagram.fullName)}</span>
+                    <span class="pair-gist">${esc(hexagram.explanation)}</span>
+                </span>
+            </button>`;
+    }
+
+    // 解读指引：直接把“应当看的那一句”摆到用户眼前
+    function guideHtml(model) {
+        const { guide, primary, changed } = model;
+        const items = guide.focus.map((focus) => {
+            const hexagram = focus.target === 'changed' ? changed : primary;
+            const tag = focus.target === 'changed' ? '之卦' : '本卦';
+
+            if (focus.kind === 'special') {
+                // 用九、用六以经传原文为准，缺失时退回内置文本
+                const extra = primary.classic?.extra;
+                return focusItem(true, [`${tag}${esc(primary.name)}`, esc(focus.label)], {
+                    classic: `${esc(focus.label)}，${esc(extra?.text || focus.text)}`,
+                    xiang: extra?.xiang || '',
+                    gloss: '六爻皆变，乾坤两卦另有专辞。'
                 });
-
-                // 等待动画结束
-                setTimeout(() => {
-                    if (generation !== throwGeneration) {
-                        resolve(false);
-                        return;
-                    }
-
-                    const sum = results.reduce((a, b) => a + b, 0);
-                    const lineInfo = interpretCoinResult(sum);
-
-                    lines.push(lineInfo);
-                    displayCoinResult(results, lineInfo);
-                    renderHexagram();
-                    updateHexagramDisplay();
-
-                    resolve(true);
-                }, 1500);
-            }, 100);
-        });
-    }
-
-    // 创建铜钱元素
-    function createCoinElement() {
-        const coinContainer = document.createElement('div');
-        coinContainer.className = 'coin';
-
-        const coinInner = document.createElement('div');
-        coinInner.className = 'coin-inner';
-
-        const frontFace = document.createElement('div');
-        frontFace.className = 'coin-face coin-front';
-        frontFace.textContent = '阳';
-
-        const backFace = document.createElement('div');
-        backFace.className = 'coin-face coin-back';
-        backFace.textContent = '阴';
-
-        coinInner.appendChild(frontFace);
-        coinInner.appendChild(backFace);
-        coinContainer.appendChild(coinInner);
-
-        return coinContainer;
-    }
-
-    // 解释铜钱结果
-    function interpretCoinResult(sum) {
-        const interpretations = {
-            6: { type: 'yin', changing: true, name: '老阴' },
-            7: { type: 'yang', changing: false, name: '少阳' },
-            8: { type: 'yin', changing: false, name: '少阴' },
-            9: { type: 'yang', changing: true, name: '老阳' }
-        };
-
-        return interpretations[sum] || interpretations[7];
-    }
-
-    // 显示铜钱结果
-    function displayCoinResult(coinResults, lineInfo) {
-        if (!coinsResult) return;
-
-        const resultText = `${coinResults.join(' + ')} = ${coinResults.reduce((a, b) => a + b, 0)} (${lineInfo.name})`;
-        coinsResult.textContent = resultText;
-
-        // 添加颜色指示
-        coinsResult.className = `coins-result ${lineInfo.changing ? 'changing' : 'stable'}`;
-    }
-
-    // 渲染卦象
-    function renderHexagram(customLines = null) {
-        if (!hexagramContainer) return;
-
-        const currentLines = customLines || lines;
-        hexagramContainer.innerHTML = '';
-
-        if (currentLines.length === 0) {
-            const placeholder = document.createElement('div');
-            placeholder.className = 'hexagram-placeholder';
-            placeholder.innerHTML = '<div class="placeholder-text">请开始投掷铜钱形成卦象</div>';
-            hexagramContainer.appendChild(placeholder);
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        currentLines.forEach((lineObj, index) => {
-            const lineDiv = createLineElement(lineObj, index, currentLines.length);
-            fragment.appendChild(lineDiv);
-        });
-
-        hexagramContainer.appendChild(fragment);
-    }
-
-    // 创建爻线元素
-    function createLineElement(lineObj, index, totalLines) {
-        const lineDiv = document.createElement('div');
-        lineDiv.classList.add('line', lineObj.type);
-
-        if (lineObj.changing) {
-            lineDiv.classList.add('changing');
-        }
-
-        // 检查当位
-        const lineBitIndex = 5 - index;
-        const positionBit = positionCode.charAt(lineBitIndex);
-        const lineBit = lineObj.type === 'yang' ? '1' : '0';
-
-        if (lineBit !== positionBit) {
-            lineDiv.classList.add('not-position');
-        }
-
-        // 新添加的爻线动画
-        if (index === totalLines - 1) {
-            lineDiv.classList.add('new-line');
-        }
-
-        // 创建线段
-        if (lineObj.type === 'yang') {
-            const segment = document.createElement('div');
-            segment.classList.add('segment');
-            lineDiv.appendChild(segment);
-        } else {
-            const segmentLeft = document.createElement('div');
-            segmentLeft.classList.add('segment', 'left');
-
-            const gap = document.createElement('div');
-            gap.classList.add('middle-gap');
-
-            const segmentRight = document.createElement('div');
-            segmentRight.classList.add('segment', 'right');
-
-            lineDiv.appendChild(segmentLeft);
-            lineDiv.appendChild(gap);
-            lineDiv.appendChild(segmentRight);
-        }
-
-        return lineDiv;
-    }
-
-    // 处理占卜完成
-    function handleDivinationComplete() {
-        throwCoinBtn.disabled = true;
-        changeHexagramBtn.disabled = false;
-        saveBtn.disabled = false;
-        exportBtn.disabled = false;
-
-        updateStep(3);
-
-        // 显示完成通知
-        const changingCount = lines.filter(line => line.changing).length;
-        const message = changingCount > 0
-            ? `占卜完成！发现${changingCount}个变爻，建议查看变卦。`
-            : '占卜完成！未发现变爻，当前卦象稳定。';
-
-        YizhiApp.getModule('notification')?.show('success', '占卜完成', message);
-    }
-
-    // 更新卦象显示
-    function updateHexagramDisplay(customLines = null) {
-        if (!YizhiApp.getModule('hexagramData')?.isInitialized) {
-            return;
-        }
-
-        const currentLines = customLines || lines;
-
-        if (currentLines.length !== 6) {
-            resetDisplays();
-            return;
-        }
-
-        try {
-            const binary = generateBinaryFromLines(currentLines);
-            const hexagram = YizhiApp.getModule('hexagramData').getHexagramByBinary(binary);
-
-            if (hexagram) {
-                updateHexagramInfo(hexagram);
-                updateTrigramInfo(hexagram);
-                updateContentTabs(hexagram);
-                updateRelatedHexagrams(hexagram.id);
-                saveBtn.disabled = false;
-                exportBtn.disabled = false;
-            } else {
-                showHexagramNotFound();
             }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Update Hexagram Display');
-        }
-    }
 
-    // 从爻线生成二进制
-    function generateBinaryFromLines(currentLines) {
-        let binary = '';
-        for (let i = 5; i >= 0; i--) {
-            binary += currentLines[i].type === 'yang' ? '1' : '0';
-        }
-        return binary;
-    }
+            if (focus.kind === 'overview') {
+                const role = focus.role ? `<span class="badge">${focus.role === '贞' ? '贞 · 体' : '悔 · 用'}</span>` : '';
+                return focusItem(!focus.role || focus.role === '贞', [`${tag}${esc(hexagram.name)}`, '卦辞', role], {
+                    classic: esc(hexagram.judgment || hexagram.explanation),
+                    xiang: hexagram.classic?.daxiang || '',
+                    gloss: `${hexagram.explanation}。${hexagram.overview}`
+                });
+            }
 
-    // 更新卦象基本信息
-    function updateHexagramInfo(hexagram) {
-        if (hexagramNameDisplay) {
-            hexagramNameDisplay.textContent = hexagram.name;
-        }
-        if (hexagramUnicodeDisplay) {
-            hexagramUnicodeDisplay.textContent = hexagram.unicode;
-        }
-        if (hexagramExplanationDisplay) {
-            hexagramExplanationDisplay.textContent = hexagram.explanation || '';
-        }
-    }
-
-    // 更新上下卦信息
-    function updateTrigramInfo(hexagram) {
-        if (!upperTrigramInfo || !lowerTrigramInfo) return;
-
-        if (hexagram.upperTrigram && hexagram.lowerTrigram) {
-            const upperBagua = YizhiApp.getModule('hexagramData').getBagua(hexagram.upperTrigram);
-            const lowerBagua = YizhiApp.getModule('hexagramData').getBagua(hexagram.lowerTrigram);
-
-            upperTrigramInfo.textContent = upperBagua
-                ? `上卦: ${hexagram.upperTrigram} ${upperBagua.symbol} (${upperBagua.nature})`
-                : '';
-
-            lowerTrigramInfo.textContent = lowerBagua
-                ? `下卦: ${hexagram.lowerTrigram} ${lowerBagua.symbol} (${lowerBagua.nature})`
-                : '';
-        } else {
-            upperTrigramInfo.textContent = '';
-            lowerTrigramInfo.textContent = '';
-        }
-    }
-
-    // 更新内容标签页
-    function updateContentTabs(hexagram) {
-        updateContent(overviewContent, hexagram.overview || '暂无数据');
-        updateContent(detailContent, hexagram.detail || '暂无数据');
-        updateLinesContent(hexagram);
-    }
-
-    // 更新内容
-    function updateContent(element, content) {
-        if (element) {
-            element.innerHTML = `<div class="content-text">${content}</div>`;
-        }
-    }
-
-    // 更新爻辞内容
-    function updateLinesContent(hexagram) {
-        if (!linesContent) return;
-
-        linesContent.innerHTML = '';
-
-        if (hexagram.lines && hexagram.lines.length > 0) {
-            hexagram.lines.forEach(line => {
-                const lineDetail = createLineDetail(line);
-                linesContent.appendChild(lineDetail);
+            const line = hexagram.lines[focus.position - 1];
+            const role = guide.focus.length > 1 ? `<span class="badge">${focus.main ? '为主' : '参看'}</span>` : '';
+            const moving = focus.target === 'primary' ? '<span class="badge badge-changing">变爻</span>' : '<span class="badge">不变爻</span>';
+            const position = YiCore.linePositions(hexagram.bits)[focus.position - 1];
+            return focusItem(focus.main, [`${tag}${esc(hexagram.name)}`, esc(line.title), moving, role, YizhiApp.ui.positionTags(position)], {
+                classic: esc(line.text),
+                xiang: line.xiang,
+                gloss: line.gloss
             });
-        } else {
-            linesContent.innerHTML = '<div class="empty-state"><p>暂无爻辞数据</p></div>';
-        }
+        });
+
+        return `
+            <section class="panel guide" aria-labelledby="guideTitle">
+                <div class="guide-head">
+                    <h3 class="guide-title" id="guideTitle">解读指引</h3>
+                    <p class="guide-rule"><strong>${guide.rule.name}</strong>，${guide.rule.text}</p>
+                </div>
+                <div class="focus-list">${items.join('')}</div>
+            </section>`;
     }
 
-    // 创建爻辞详情元素
-    function createLineDetail(line) {
-        const lineDetail = document.createElement('div');
-        lineDetail.className = 'line-reading';
-
-        const position = line.position || 0;
-        const content = line.content || '暂无爻辞';
-
-        lineDetail.innerHTML = `
-            <div class="line-position">第${position}爻</div>
-            <p class="line-content">${content}</p>
-        `;
-
-        if (lines[position - 1]?.changing) {
-            lineDetail.classList.add('changing-line-highlight');
-        }
-
-        return lineDetail;
+    /**
+     * @param {boolean} main 是否为主断之辞
+     * @param {string[]} metaParts 已转义的标签片段
+     * @param {{classic: string, xiang?: string, gloss?: string}} text classic 已转义；xiang、gloss 为原始文本
+     */
+    function focusItem(main, metaParts, text) {
+        return `
+            <div class="focus-item${main ? ' is-main' : ''}">
+                <p class="focus-meta">${metaParts.filter(Boolean).map(part => (part.startsWith('<') ? part : `<span>${part}</span>`)).join('')}</p>
+                <p class="focus-classic">${text.classic}</p>
+                ${text.xiang ? `<p class="focus-xiang"><span class="line-xiang-label">象曰</span>${esc(text.xiang)}</p>` : ''}
+                ${text.gloss ? `<p class="focus-gloss">${esc(text.gloss)}</p>` : ''}
+            </div>`;
     }
 
-    // 更新相关卦象
-    function updateRelatedHexagrams(hexagramId) {
-        if (!relationsContent) return;
+    function studyHtml(model) {
+        const { guide, primary, changed } = model;
+        const showChanged = state.tab === 'changed' && changed;
+        const hexagram = showChanged ? changed : primary;
+        const target = showChanged ? 'changed' : 'primary';
+        const focus = {};
+        guide.focus
+            .filter(item => item.kind === 'line' && item.target === target)
+            .forEach((item) => {
+                focus[item.position] = guide.focus.length > 1 ? (item.main ? '为主' : '参看') : '所占';
+            });
 
-        relationsContent.innerHTML = '';
+        if (guide.count === 6 && target === 'primary' && hexagram.classic?.extra) {
+            focus[7] = '所占';
+        }
 
-        const related = YizhiApp.getModule('hexagramData').getRelatedHexagrams(hexagramId);
+        const { ui } = YizhiApp;
+        const classic = ui.classicBlock(hexagram);
+        const wings = ui.wingsBlock(hexagram);
 
-        if (!related || Object.keys(related).length === 0) {
-            relationsContent.innerHTML = '<div class="empty-state"><p>暂无相关卦象数据</p></div>';
+        const tabs = changed
+            ? `<div class="tabs" role="tablist" aria-label="卦文">
+                    ${tabButton('primary', `本卦 · ${primary.name}`, !showChanged)}
+                    ${tabButton('changed', `之卦 · ${changed.name}`, showChanged)}
+               </div>`
+            : '';
+
+        return `
+            <section class="panel study" aria-label="卦文">
+                ${tabs}
+                <div class="tab-panel" ${changed ? `role="tabpanel" id="studyPanel" aria-labelledby="tab-${target}"` : ''}>
+                    ${classic ? `<h3 class="section-label">${esc(hexagram.name)} · 卦辞 · 彖 · 象</h3>${classic}` : ''}
+                    <h3 class="section-label">白话</h3>
+                    <p class="study-overview">${esc(hexagram.overview)}</p>
+                    <details class="study-detail">
+                        <summary>展开详解</summary>
+                        <p>${esc(hexagram.detail)}</p>
+                    </details>
+                    <h3 class="section-label">六爻</h3>
+                    ${ui.positionSummary(hexagram.bits)}
+                    ${ui.lineList(hexagram, {
+                        changing: showChanged ? [] : guide.changing,
+                        moved: showChanged ? guide.changing : [],
+                        focus
+                    })}
+                    ${wings ? `<h3 class="section-label">传</h3>${wings}` : ''}
+                    <h3 class="section-label">错 · 综 · 互</h3>
+                    ${ui.relationChips(hexagram)}
+                </div>
+            </section>`;
+    }
+
+    function tabButton(key, label, selected) {
+        return `<button class="tab" type="button" role="tab" id="tab-${key}" data-tab="${key}"
+            aria-selected="${selected}" aria-controls="studyPanel" tabindex="${selected ? 0 : -1}">${esc(label)}</button>`;
+    }
+
+    function footerHtml() {
+        const saved = Boolean(state.savedId);
+        return `
+            <footer class="reading-footer" id="readingFooter">
+                <p class="reading-note">${saved ? '已记入占记' : '尚未保存 · 记录只存于本机'}</p>
+                <button class="btn btn-ghost" type="button" data-action="export">导出 JSON</button>
+                <button class="btn" type="button" data-action="copy">复制卦文</button>
+                <button class="btn btn-primary" type="button" data-action="save" aria-disabled="${saved}">${saved ? '已保存' : '保存到占记'}</button>
+            </footer>`;
+    }
+
+    function handleReadingClick(event) {
+        const tab = event.target.closest('[data-tab]');
+        if (tab) {
+            selectTab(tab.dataset.tab);
             return;
         }
 
-        const relationTypes = {
-            opposite: '对宫卦',
-            inverse: '综卦',
-            mutual: '互卦'
-        };
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if (action === 'save') save();
+        if (action === 'copy') copy();
+        if (action === 'export') exportJson();
+    }
 
-        for (const [type, hexagram] of Object.entries(related)) {
-            if (!hexagram) continue;
+    function selectTab(key) {
+        if (state.tab === key) return;
+        state.tab = key;
+        renderReading();
+        document.getElementById(`tab-${key}`)?.focus();
+    }
 
-            const relationItem = createRelationItem(hexagram, relationTypes[type] || type);
-            relationsContent.appendChild(relationItem);
+    // 标签页键盘操作：左右方向键切换
+    function handleTabKeys(event) {
+        if (!event.target.matches('[role="tab"]')) return;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            selectTab(state.tab === 'primary' ? 'changed' : 'primary');
         }
     }
 
-    // 创建关系项元素
-    function createRelationItem(hexagram, typeName) {
-        const relationItem = document.createElement('div');
-        relationItem.className = 'relation-item';
-        relationItem.innerHTML = `
-            <div class="relation-symbol">${hexagram.unicode || ''}</div>
-            <div class="relation-info">
-                <div class="relation-name">${hexagram.name || '未知卦象'}</div>
-                <div class="relation-type">${typeName}</div>
-            </div>
-        `;
+    function onComplete() {
+        const title = document.getElementById('readingTitle');
+        if (!title) return;
+        title.focus({ preventScroll: true });
 
-        relationItem.addEventListener('click', () => {
-            YizhiApp.getModule('modal')?.show(hexagram);
+        // 窄屏时解读在成卦台下方，成卦后滚动过去；放到下一帧，避免被同步重绘与失焦打断
+        if (!window.matchMedia('(max-width: 960px)').matches) return;
+        requestAnimationFrame(() => {
+            const offset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-height')) || 56;
+            window.scrollTo({
+                top: reading.getBoundingClientRect().top + window.scrollY - offset - 12,
+                behavior: YizhiApp.utils.prefersReducedMotion() ? 'auto' : 'smooth'
+            });
+        });
+    }
+
+    function refreshFooter() {
+        const footer = document.getElementById('readingFooter');
+        if (footer) footer.outerHTML = footerHtml();
+    }
+
+    function save() {
+        if (state.lines.length !== 6 || state.savedId) return;
+        const model = buildModel();
+        const record = YizhiApp.getModule('history')?.addRecord({
+            timestamp: state.castAt || Date.now(),
+            question: questionInput?.value.trim() || '',
+            lines: state.lines.map(line => ({ ...line })),
+            hexagramId: model.primary.id,
+            changedHexagramId: model.changed ? model.changed.id : null,
+            source: 'cast'
         });
 
-        return relationItem;
+        if (!record) return;
+        state.savedId = record.id;
+        refreshFooter();
+        reading.querySelector('[data-action="save"]')?.focus();
+        YizhiApp.toast('success', '已记入占记', {
+            action: { label: '查看', handler: () => YizhiApp.router.go('history') }
+        });
     }
 
-    // 重置显示
-    function resetDisplays() {
-        if (hexagramNameDisplay) hexagramNameDisplay.textContent = '待演算';
-        if (hexagramUnicodeDisplay) hexagramUnicodeDisplay.textContent = '';
-        if (hexagramExplanationDisplay) hexagramExplanationDisplay.textContent = '';
-        if (upperTrigramInfo) upperTrigramInfo.textContent = '';
-        if (lowerTrigramInfo) lowerTrigramInfo.textContent = '';
+    function readingText() {
+        const { guide, primary, changed } = buildModel();
+        const question = questionInput?.value.trim();
+        const when = YizhiApp.utils.formatDate(new Date(state.castAt || Date.now()), 'YYYY-MM-DD HH:mm');
+        const lines = state.lines.map((line, index) => {
+            const mark = line.changing ? (line.type === 'yang' ? ' ○' : ' ×') : '';
+            return `${YiCore.lineTitle(index + 1, line.type === 'yang')}　${line.name}${mark}`;
+        }).reverse();
 
-        const emptyState = '<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7"></path></svg><p>请完成卦象演算以查看详细解读</p></div>';
-
-        if (overviewContent) overviewContent.innerHTML = emptyState;
-        if (detailContent) detailContent.innerHTML = emptyState;
-        if (linesContent) linesContent.innerHTML = emptyState;
-        if (relationsContent) relationsContent.innerHTML = emptyState;
-    }
-
-    // 显示卦象未找到
-    function showHexagramNotFound() {
-        if (hexagramNameDisplay) hexagramNameDisplay.textContent = '未找到对应卦名';
-        if (hexagramUnicodeDisplay) hexagramUnicodeDisplay.textContent = '';
-        if (hexagramExplanationDisplay) hexagramExplanationDisplay.textContent = '';
-        resetDisplays();
-    }
-
-    // 变卦显示
-    function toggleChangingLines() {
-        if (lines.length !== 6) return;
-
-        try {
-            if (transformed) {
-                renderHexagram();
-                updateHexagramDisplay();
-                changeHexagramBtn.textContent = '变卦显示';
-                transformed = false;
-            } else {
-                const transformedLines = lines.map(line => {
-                    if (line.changing) {
-                        return {
-                            type: line.type === 'yang' ? 'yin' : 'yang',
-                            changing: false
-                        };
-                    }
-                    return { ...line };
-                });
-
-                renderHexagram(transformedLines);
-                updateHexagramDisplay(transformedLines);
-                changeHexagramBtn.textContent = '恢复本卦';
-                transformed = true;
-                updateStep(4);
+        const withXiang = (text, xiang) => (xiang ? `${text}\n象曰：${xiang}` : text);
+        const focus = guide.focus.map((item) => {
+            const hexagram = item.target === 'changed' ? changed : primary;
+            if (item.kind === 'special') {
+                const extra = primary.classic?.extra;
+                return withXiang(`${item.label}，${extra?.text || item.text}`, extra?.xiang);
             }
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Toggle Changing Lines');
-        }
-    }
-
-    // 处理重置
-    async function handleReset() {
-        const confirmed = await YizhiApp.confirm.show(
-            '确认重置',
-            '确定要重新开始占卜吗？当前进度将会丢失。',
-            { danger: true, okText: '重新开始' }
-        );
-
-        if (confirmed) {
-            resetDivination();
-            YizhiApp.getModule('notification')?.show('info', '重新起卦',
-                '已重置占卜，可以开始新的一次演算。');
-        }
-    }
-
-    // 重置占卜
-    function resetDivination() {
-        throwGeneration += 1;
-        lines = [];
-        transformed = false;
-        animationInProgress = false;
-
-        renderHexagram();
-        resetDisplays();
-
-        if (coinsDisplay) coinsDisplay.innerHTML = '';
-        if (coinsResult) coinsResult.textContent = '';
-
-        // 重置按钮状态
-        throwCoinBtn.disabled = false;
-        changeHexagramBtn.disabled = true;
-        saveBtn.disabled = true;
-        exportBtn.disabled = true;
-        changeHexagramBtn.textContent = '变卦显示';
-
-        // 重置进度
-        updateProgress(0);
-        updateProgressCount();
-        updateThrowButtonText();
-        updateStep(1);
-    }
-
-    // 保存到历史记录
-    function saveToHistory() {
-        if (lines.length !== 6) return;
-
-        try {
-            const binary = generateBinaryFromLines(lines);
-            const hexagram = YizhiApp.getModule('hexagramData').getHexagramByBinary(binary);
-
-            if (!hexagram) return;
-
-            const now = new Date();
-
-            const historyItem = {
-                id: YizhiApp.utils.generateId(),
-                timestamp: now.getTime(),
-                date: YizhiApp.utils.formatDate(now),
-                hexagram: hexagram,
-                lines: YizhiApp.utils.deepClone(lines),
-                notes: '',
-                changingLinesCount: lines.filter(line => line.changing).length
-            };
-
-            YizhiApp.getModule('history')?.addRecord(historyItem);
-            YizhiApp.getModule('notification')?.show('success', '保存成功',
-                '占卜结果已保存到历史记录。', 3000);
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Save to History');
-        }
-    }
-
-    // 导出结果
-    function exportResult() {
-        if (lines.length !== 6) return;
-
-        try {
-            const binary = generateBinaryFromLines(lines);
-            const hexagram = YizhiApp.getModule('hexagramData').getHexagramByBinary(binary);
-
-            if (!hexagram) return;
-
-            const exportData = {
-                date: YizhiApp.utils.formatDate(new Date()),
-                hexagram: {
-                    name: hexagram.name,
-                    explanation: hexagram.explanation,
-                    overview: hexagram.overview,
-                    detail: hexagram.detail
-                },
-                lines: lines.map((line, index) => ({
-                    position: index + 1,
-                    type: line.type,
-                    changing: line.changing
-                })),
-                changingLinesCount: lines.filter(line => line.changing).length
-            };
-
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(dataBlob);
-            link.download = `易之占卜_${hexagram.name}_${YizhiApp.utils.formatDate(new Date(), 'YYYY-MM-DD_HH-mm-ss')}.json`;
-            link.click();
-
-            URL.revokeObjectURL(link.href);
-
-            YizhiApp.getModule('notification')?.show('success', '导出成功',
-                '占卜结果已导出到本地文件。');
-        } catch (error) {
-            YizhiApp.errors.handle(error, 'Export Result');
-        }
-    }
-
-    // 更新进度条
-    function updateProgress(percentage) {
-        if (progressBar) {
-            progressBar.style.width = `${percentage}%`;
-        }
-    }
-
-    // 更新进度计数
-    function updateProgressCount() {
-        if (progressCount) {
-            progressCount.textContent = `${lines.length}/6`;
-        }
-    }
-
-    // 更新投掷按钮文本
-    function updateThrowButtonText() {
-        if (throwSubtitle) {
-            throwSubtitle.textContent = lines.length < 6 ? `第${lines.length + 1}爻` : '已完成';
-        }
-    }
-
-    // 更新步骤指引
-    function updateStep(step) {
-        Object.values(steps).forEach(stepEl => {
-            if (stepEl) {
-                stepEl.classList.remove('active', 'completed');
+            if (item.kind === 'overview') {
+                const judgment = hexagram.judgment || `${hexagram.name}：${hexagram.explanation}。`;
+                return withXiang(judgment, hexagram.classic?.daxiang) + `\n${hexagram.overview}`;
             }
+            const line = hexagram.lines[item.position - 1];
+            return line ? withXiang(`${line.title}，${line.text}`, line.xiang) + (line.gloss ? `\n${line.gloss}` : '') : '';
         });
 
-        for (let i = 1; i < step; i++) {
-            if (steps[`step${i}`]) {
-                steps[`step${i}`].classList.add('completed');
-            }
+        return [
+            ...(question ? [`所问：${question}`] : []),
+            `时间：${when}`,
+            `本卦：${primary.fullName}（${primary.explanation}）`,
+            changed ? `之卦：${changed.fullName}（${changed.explanation}）` : '六爻安静',
+            '',
+            ...lines,
+            '',
+            `${guide.rule.name}：${guide.rule.text}`,
+            ...focus,
+            '',
+            '—— 易之'
+        ].join('\n');
+    }
+
+    async function copy() {
+        const copied = await YizhiApp.utils.copyText(readingText());
+        YizhiApp.toast(copied ? 'success' : 'error', copied ? '卦文已复制' : '复制失败，请手动选择文本');
+    }
+
+    function exportJson() {
+        const { primary, changed, guide } = buildModel();
+        const timestamp = state.castAt || Date.now();
+        YizhiApp.utils.downloadJson(`易之_${primary.name}_${YizhiApp.utils.formatDate(new Date(timestamp), 'YYYYMMDD-HHmmss')}.json`, {
+            app: YizhiApp.config.name,
+            version: YizhiApp.config.version,
+            date: YizhiApp.utils.formatDate(new Date(timestamp)),
+            question: questionInput?.value.trim() || '',
+            hexagram: { id: primary.id, name: primary.name, fullName: primary.fullName, explanation: primary.explanation },
+            changedHexagram: changed ? { id: changed.id, name: changed.name, fullName: changed.fullName } : null,
+            lines: state.lines.map((line, index) => ({
+                position: index + 1,
+                value: line.value,
+                type: line.type,
+                changing: line.changing
+            })),
+            changingLinesCount: guide.count,
+            rule: `${guide.rule.name}：${guide.rule.text}`
+        });
+    }
+
+    function hasUnsavedWork() {
+        return state.lines.length > 0 && !state.savedId && !state.fromHistory;
+    }
+
+    // 作废进行中的投掷：旧的 castOnce 在延时结束后会发现代次已变而不写入
+    function cancelPending() {
+        generation += 1;
+        state.busy = false;
+        state.fast = false;
+    }
+
+    async function reset(options = {}) {
+        // 界面按钮在投掷中禁用；外部强制重置（force）则取消进行中的投掷
+        if (state.busy && !options.force) return false;
+        if (!options.force && hasUnsavedWork()) {
+            const done = state.lines.length === 6;
+            const confirmed = await YizhiApp.dialogs.confirm(
+                done ? '放弃这一卦？' : '重新开始？',
+                done ? '这一卦尚未保存，重新起卦后将无法找回。' : `已掷 ${state.lines.length} 爻，重来会清空当前进度。`,
+                { okText: done ? '放弃并重起' : '重来', danger: true }
+            );
+            if (!confirmed) return false;
         }
 
-        if (steps[`step${step}`]) {
-            steps[`step${step}`].classList.add('active');
+        cancelPending();
+        const clearQuestion = state.lines.length === 6;
+        Object.assign(state, {
+            lines: [],
+            lastCoins: null,
+            castAt: null,
+            savedId: null,
+            fromHistory: false,
+            tab: 'primary'
+        });
+        if (clearQuestion && questionInput) questionInput.value = '';
+
+        renderCoins(null);
+        render();
+        questionInput?.focus();
+        return true;
+    }
+
+    function normalizeLine(line) {
+        const type = line?.type === 'yang' ? 'yang' : 'yin';
+        const changing = Boolean(line?.changing);
+        const value = Number(line?.value) || (type === 'yang' ? (changing ? 9 : 7) : (changing ? 6 : 8));
+        return YiCore.lineFromValue(value);
+    }
+
+    // 从占记恢复：完整还原六爻与所问，便于重读
+    async function loadRecord(record) {
+        if (!Array.isArray(record?.lines) || record.lines.length !== 6) return false;
+
+        if (hasUnsavedWork() && record.id !== state.savedId) {
+            const confirmed = await YizhiApp.dialogs.confirm(
+                '打开这条占记？',
+                '当前的卦尚未保存，打开占记后将被替换。',
+                { okText: '打开', danger: true }
+            );
+            if (!confirmed) return false;
         }
+
+        cancelPending();
+        Object.assign(state, {
+            lines: record.lines.map(normalizeLine),
+            lastCoins: null,
+            castAt: record.timestamp || null,
+            savedId: record.id,
+            fromHistory: true,
+            tab: 'primary'
+        });
+        if (questionInput) questionInput.value = record.question || '';
+
+        YizhiApp.router.go('cast');
+        renderCoins(null);
+        render();
+        // hashchange 异步触发并会回到顶部，稍后再定位到解读
+        setTimeout(onComplete, 80);
+        return true;
     }
 
     return {
         init,
         onActivate,
-        renderHexagram,
-        updateHexagramDisplay,
-        resetDivination
+        loadRecord,
+        reset: () => reset({ force: true })
     };
 })();

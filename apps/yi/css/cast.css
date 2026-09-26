@@ -1,0 +1,826 @@
+/* 起卦视图：左侧成卦台（问事 / 六爻 / 铜钱 / 操作），右侧解读 */
+.cast-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+}
+
+.cast-panel {
+    position: sticky;
+    top: calc(var(--topbar-height) + var(--space-4));
+    display: grid;
+    gap: var(--space-5);
+    padding: var(--space-5);
+}
+
+/* 成卦台：自上而下为上爻 → 初爻，与卦画阅读方向一致 */
+.stage {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.stage-group {
+    display: grid;
+    gap: 6px;
+}
+
+.stage-caption {
+    display: flex;
+    justify-content: space-between;
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.1em;
+}
+
+.stage-caption strong {
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    font-weight: 600;
+}
+
+.stage-row {
+    display: grid;
+    grid-template-columns: 2.2em minmax(0, 1fr) 5.2em 2.4em;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 30px;
+    --yao-h: 12px;
+    --yao-split: 14%;
+}
+
+.stage-pos {
+    color: var(--ink-3);
+    font-family: var(--font-serif);
+    font-size: var(--text-sm);
+}
+
+.stage-row.is-next .stage-pos {
+    color: var(--cinnabar);
+    font-weight: 700;
+}
+
+.stage-row .yao {
+    --yao-w: 100%;
+}
+
+.stage-meta {
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.stage-row.is-changing .stage-meta {
+    color: var(--cinnabar);
+    font-weight: 600;
+}
+
+/* 当位 / 失位：墨色实框为当位，淡墨虚框为失位 */
+.stage-place,
+.pos-tag {
+    display: inline-block;
+    padding: 0 5px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    color: var(--ink-2);
+    font-size: 11px;
+    line-height: 18px;
+    letter-spacing: 0.04em;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.stage-place:empty {
+    visibility: hidden;
+}
+
+.stage-place.is-off,
+.pos-tag.is-off {
+    border-style: dashed;
+    color: var(--ink-3);
+}
+
+/* 铜钱：外圆内方，背为光面记 3，字面记 2 */
+.coins {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-4);
+    min-height: 86px;
+    perspective: 600px;
+}
+
+.coin {
+    --coin-base: 0deg;
+    position: relative;
+    width: 60px;
+    height: 60px;
+    transform-style: preserve-3d;
+    transform: rotateY(var(--coin-base));
+}
+
+.coin.is-face {
+    --coin-base: 180deg;
+}
+
+.coin-side {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--bronze-1), var(--bronze-2) 75%);
+    box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.12), inset 0 0 0 5px rgba(255, 255, 255, 0.12), var(--shadow-1);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.coin-side::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--paper);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.14);
+}
+
+.coin-face {
+    transform: rotateY(180deg);
+}
+
+.coin-face span {
+    position: absolute;
+    color: var(--bronze-ink);
+    font-family: var(--font-serif);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.coin-face span:nth-child(1) { top: 7px; }
+.coin-face span:nth-child(2) { bottom: 7px; }
+.coin-face span:nth-child(3) { right: 8px; }
+.coin-face span:nth-child(4) { left: 8px; }
+
+.coin-slot {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+}
+
+.coin-value {
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    transition: opacity var(--dur-fast) var(--ease);
+}
+
+.coin.is-tossing {
+    animation: coin-toss var(--toss-duration, 900ms) var(--ease-out) both;
+    animation-delay: var(--toss-delay, 0ms);
+}
+
+.coin-slot.is-tossing .coin-value {
+    opacity: 0;
+}
+
+@keyframes coin-toss {
+    0% { transform: translateY(0) rotateY(var(--coin-base)) rotateX(0); }
+    40% { transform: translateY(-34px) rotateY(calc(var(--coin-base) + 900deg)) rotateX(20deg); }
+    100% { transform: translateY(0) rotateY(calc(var(--coin-base) + 1440deg)) rotateX(0); }
+}
+
+.cast-status {
+    min-height: 1.7em;
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+    text-align: center;
+}
+
+.cast-status strong {
+    color: var(--ink);
+}
+
+.cast-status .mark-changing {
+    font-weight: 600;
+}
+
+.cast-actions {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.cast-secondary {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.cast-panel.is-complete .coins {
+    display: none;
+}
+
+/* 解读区 */
+.reading {
+    display: grid;
+    gap: var(--space-5);
+    min-width: 0;
+    outline: none;
+    container-type: inline-size;
+}
+
+.reading-intro {
+    display: grid;
+    gap: var(--space-5);
+    padding: var(--space-6);
+}
+
+.reading-intro h2 {
+    font-family: var(--font-serif);
+    font-size: var(--text-xl);
+    letter-spacing: 0.1em;
+}
+
+.reading-intro p {
+    color: var(--ink-2);
+}
+
+.intro-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunk);
+}
+
+.intro-progress p {
+    font-size: var(--text-sm);
+}
+
+.value-table {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.value-table > div {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+}
+
+.value-table dt {
+    font-family: var(--font-serif);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.value-table dd {
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+}
+
+.reading-head {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.reading-eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+}
+
+.reading-question {
+    font-family: var(--font-serif);
+    font-size: var(--text-xl);
+    line-height: 1.5;
+}
+
+/* 本卦 → 之卦 */
+.pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-3);
+}
+
+.pair.is-single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.pair-arrow {
+    align-self: center;
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+    writing-mode: horizontal-tb;
+}
+
+.pair-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    text-align: left;
+    transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.pair-card:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-2);
+}
+
+.pair-card .gua {
+    --yao-w: 72px;
+    --yao-h: 9px;
+    --yao-gap: 7px;
+    /* 给右侧的 ○/× 变爻标记留出位置 */
+    margin-right: 18px;
+}
+
+.pair-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pair-tag {
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.16em;
+}
+
+.pair-name {
+    font-family: var(--font-serif);
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0.06em;
+}
+
+.pair-full {
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+}
+
+.pair-gist {
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+}
+
+@container (max-width: 560px) {
+    .pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pair-arrow {
+        justify-self: center;
+        transform: rotate(90deg);
+    }
+
+    .pair-name {
+        font-size: var(--text-2xl);
+    }
+}
+
+/* 解读指引 */
+.guide {
+    display: grid;
+    gap: var(--space-4);
+    padding: var(--space-5);
+}
+
+.guide-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+}
+
+.guide-title {
+    font-family: var(--font-serif);
+    font-size: var(--text-lg);
+    letter-spacing: 0.1em;
+}
+
+.guide-rule {
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+}
+
+.focus-list {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.focus-item {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+    border-left: 3px solid var(--line-strong);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background: var(--surface-sunk);
+}
+
+.focus-item.is-main {
+    border-left-color: var(--ink);
+}
+
+.focus-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+}
+
+.focus-classic {
+    font-family: var(--font-serif);
+    font-size: var(--text-lg);
+    line-height: 1.6;
+}
+
+.focus-gloss {
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+}
+
+/* 卦文：本卦 / 之卦切换 */
+.study {
+    padding: var(--space-2) var(--space-5) var(--space-5);
+}
+
+.tabs {
+    display: flex;
+    gap: var(--space-5);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--line);
+}
+
+.tab {
+    position: relative;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+    letter-spacing: 0.08em;
+}
+
+.tab:hover {
+    color: var(--ink);
+}
+
+.tab[aria-selected="true"] {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.tab[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--ink);
+}
+
+.study-overview {
+    font-family: var(--font-serif);
+    font-size: var(--text-lg);
+    line-height: 1.8;
+}
+
+.study-detail {
+    margin-top: var(--space-3);
+}
+
+.study-detail summary {
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.study-detail p {
+    margin-top: var(--space-2);
+    color: var(--ink-2);
+}
+
+.section-label {
+    margin: var(--space-5) 0 var(--space-2);
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.16em;
+}
+
+/* 爻辞列表：初 → 上，按阅读顺序 */
+.line-list {
+    display: grid;
+}
+
+/* 每爻：爻题与爻位标记一行，其下经文、小象、白话 */
+.line-item {
+    display: grid;
+    gap: 6px;
+    padding: var(--space-3) 0;
+    border-top: 1px solid var(--line);
+}
+
+.line-item:first-child {
+    border-top: 0;
+}
+
+.line-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.line-title {
+    min-width: 2.6em;
+    font-family: var(--font-serif);
+    font-weight: 700;
+    color: var(--ink-2);
+}
+
+.pos-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.line-body {
+    display: grid;
+    gap: 4px;
+}
+
+.line-classic {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+}
+
+.line-xiang,
+.focus-xiang {
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    font-size: var(--text-sm);
+}
+
+.line-xiang-label {
+    margin-right: 0.5em;
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.1em;
+}
+
+.line-gloss {
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+}
+
+.line-item.is-extra .line-title {
+    color: var(--ink);
+}
+
+/* 经：卦辞居首，彖、象随后 */
+.classic {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.classic > div {
+    display: grid;
+    grid-template-columns: 3em minmax(0, 1fr);
+    gap: var(--space-3);
+}
+
+.classic dt {
+    padding-top: 2px;
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.12em;
+}
+
+.classic dd {
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    line-height: 1.8;
+}
+
+.classic > .classic-judgment {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.classic-judgment dd {
+    color: var(--ink);
+    font-size: var(--text-xl);
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+}
+
+.classic-brief dd {
+    font-size: var(--text-sm);
+}
+
+.classic-note {
+    margin-top: var(--space-3);
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+}
+
+.wing {
+    margin-bottom: var(--space-3);
+}
+
+.wing summary {
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    cursor: pointer;
+}
+
+.wing > p {
+    margin-top: var(--space-2);
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    font-size: var(--text-sm);
+    line-height: 1.9;
+}
+
+.pos-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    margin-bottom: var(--space-1);
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+}
+
+.pos-note {
+    color: var(--ink-2);
+    font-weight: 600;
+}
+
+.line-tags {
+    display: inline-flex;
+    gap: var(--space-1);
+    margin-left: var(--space-2);
+    vertical-align: 2px;
+}
+
+.line-item.is-changing .line-title {
+    color: var(--cinnabar);
+}
+
+.line-item.is-focus {
+    margin: 0 calc(-1 * var(--space-3));
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunk);
+}
+
+.line-item.is-focus + .line-item {
+    border-top-color: transparent;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    padding: 0 var(--space-4) 0 var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    font-size: var(--text-sm);
+    transition: border-color var(--dur-fast) var(--ease);
+}
+
+.chip:hover {
+    border-color: var(--ink-3);
+}
+
+.chip-label {
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+}
+
+.reading-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+.reading-note {
+    margin-right: auto;
+    align-self: center;
+    color: var(--ink-3);
+    font-size: var(--text-xs);
+}
+
+@media (max-width: 960px) {
+    .cast-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cast-panel {
+        position: static;
+    }
+
+    .cast-panel.is-complete {
+        gap: var(--space-4);
+    }
+}
+
+@media (max-width: 720px) {
+    .cast-panel,
+    .guide {
+        padding: var(--space-4);
+    }
+
+    .study {
+        padding: var(--space-1) var(--space-4) var(--space-4);
+    }
+
+    .reading-intro {
+        padding: var(--space-5) var(--space-4);
+    }
+
+    .pair-card {
+        padding: var(--space-4);
+        gap: var(--space-4);
+    }
+
+    .reading-footer .btn {
+        flex: 1 1 auto;
+    }
+
+    .reading-note {
+        flex-basis: 100%;
+    }
+
+    .kbd-hint {
+        display: none;
+    }
+}
+
+.reading-result {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.tab-panel > .section-label:first-child {
+    margin-top: 0;
+}
+
+/* 详情弹窗 */
+.sheet-figure .gua {
+    --yao-w: 44px;
+    --yao-h: 6px;
+    --yao-gap: 5px;
+}
+
+.sheet-figure .yao.is-changing::after {
+    content: none;
+}
+
+.sheet-trigrams {
+    margin-bottom: var(--space-3);
+    color: var(--ink-3);
+    font-size: var(--text-sm);
+}
+
+.sheet-detail {
+    margin-top: var(--space-3);
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+}
+
+.tab-panel > .study-detail:first-child {
+    margin-top: 0;
+}

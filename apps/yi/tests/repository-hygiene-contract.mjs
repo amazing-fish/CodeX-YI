@@ -32,6 +32,10 @@ for (const rule of [
 
 assert.ok(existsSync(join(repoRoot, '.githooks', 'commit-msg')), '中文 commit-msg hook 必须存在');
 assert.ok(existsSync(join(repoRoot, '.gitmessage')), '中文提交模板必须存在');
+// Linux/macOS 检出后 Git 只执行带可执行位的 hook；Windows（core.fileMode=false）合并时易把它降为 100644
+const hookMode = execFileSync('git', ['ls-files', '-s', '.githooks/commit-msg'], { cwd: repoRoot, encoding: 'utf8' })
+  .trim().split(/\s+/)[0];
+assert.equal(hookMode, '100755', '.githooks/commit-msg 在索引中必须保留可执行位 100755');
 const hook = readFileSync(join(repoRoot, '.githooks', 'commit-msg'), 'utf8');
 const template = readFileSync(join(repoRoot, '.gitmessage'), 'utf8');
 assert.match(hook, /提交信息必须包含中文/);
@@ -39,11 +43,16 @@ assert.match(template, /类型：简短中文说明/);
 
 let shellExecutable = 'sh';
 if (process.platform === 'win32') {
-  const gitExecutable = execFileSync('where.exe', ['git'], { encoding: 'utf8' })
+  // PATH 中的 git 可能是 Git\cmd\git.exe 或 Git\mingw64\bin\git.exe，两种布局都回到 Git\bin\sh.exe
+  const candidates = execFileSync('where.exe', ['git'], { encoding: 'utf8' })
     .split(/\r?\n/)
-    .find(Boolean);
-  shellExecutable = join(dirname(gitExecutable), '..', 'bin', 'sh.exe');
-  assert.ok(existsSync(shellExecutable), 'Windows 必须使用 Git 自带的 sh.exe 执行 hook');
+    .filter(Boolean)
+    .flatMap(gitExecutable => [
+      join(dirname(gitExecutable), '..', 'bin', 'sh.exe'),
+      join(dirname(gitExecutable), '..', '..', 'bin', 'sh.exe')
+    ]);
+  shellExecutable = candidates.find(candidate => existsSync(candidate));
+  assert.ok(shellExecutable, 'Windows 必须使用 Git 自带的 sh.exe 执行 hook');
 }
 
 const hookFixtureDir = mkdtempSync(join(tmpdir(), 'codex-yi-hook-'));
