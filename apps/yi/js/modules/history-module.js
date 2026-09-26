@@ -70,11 +70,16 @@ const HistoryModule = (function() {
         return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, maxLength);
     }
 
+    // 须为正数且能构造有效 Date（上限 ±8.64e15 毫秒），否则 toISOString 会抛错
+    function isValidTimestamp(value) {
+        return Number.isFinite(value) && value > 0 && Number.isFinite(new Date(value).getTime());
+    }
+
     function parseTimestamp(record) {
         const timestamp = Number(record.timestamp);
-        if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+        if (isValidTimestamp(timestamp)) return timestamp;
         const parsed = typeof record.date === 'string' ? Date.parse(record.date.replace(' ', 'T')) : NaN;
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        return isValidTimestamp(parsed) ? parsed : 0;
     }
 
     // 接受 6/7/8/9 爻值，或旧版的 { value } / { type, changing }；其余返回 null

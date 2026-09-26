@@ -32,6 +32,10 @@ for (const rule of [
 
 assert.ok(existsSync(join(repoRoot, '.githooks', 'commit-msg')), '中文 commit-msg hook 必须存在');
 assert.ok(existsSync(join(repoRoot, '.gitmessage')), '中文提交模板必须存在');
+// Linux/macOS 检出后 Git 只执行带可执行位的 hook；Windows（core.fileMode=false）合并时易把它降为 100644
+const hookMode = execFileSync('git', ['ls-files', '-s', '.githooks/commit-msg'], { cwd: repoRoot, encoding: 'utf8' })
+  .trim().split(/\s+/)[0];
+assert.equal(hookMode, '100755', '.githooks/commit-msg 在索引中必须保留可执行位 100755');
 const hook = readFileSync(join(repoRoot, '.githooks', 'commit-msg'), 'utf8');
 const template = readFileSync(join(repoRoot, '.gitmessage'), 'utf8');
 assert.match(hook, /提交信息必须包含中文/);

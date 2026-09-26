@@ -112,6 +112,24 @@ async function testClassicsAreOptionalButValidated() {
   assert.equal(degraded.service.getClassics(), null, '损坏的经传必须整体弃用，不得部分混入');
   assert.equal(degraded.service.getHexagramById(1).judgment, '');
   assert.ok(degraded.warnings.length > 0, '弃用经传应给出警告');
+
+  // 下游直接当作对象 / 数组使用的字段，结构不对同样整体弃用
+  const malformed = {
+    '缺少附录': (data) => { delete data.appendix; },
+    '附录篇目非数组': (data) => { data.appendix.xici_shang = '系辞'; },
+    '文言非数组': (data) => { data.hexagrams['1'].wenyan = '元者善之长也'; },
+    '校记非数组': (data) => { data.hexagrams['29'].notes = { text: '徽纆' }; },
+    '用九结构不合法': (data) => { data.hexagrams['1'].extra = { title: '用九' }; },
+    '彖传非字符串': (data) => { data.hexagrams['2'].tuan = ['至哉坤元']; }
+  };
+  for (const [label, mutate] of Object.entries(malformed)) {
+    const payload = clone(validZhouyi);
+    mutate(payload);
+    const result = createService(validHexagrams, validBagua, { zhouyi: payload });
+    await result.service.init();
+    assert.equal(result.service.isInitialized, true, `${label}：经传损坏不阻断就绪`);
+    assert.equal(result.service.getClassics(), null, `${label}：必须整体弃用经传`);
+  }
 }
 
 await testValidSnapshot();

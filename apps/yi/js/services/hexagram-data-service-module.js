@@ -229,13 +229,29 @@ const HexagramDataService = (function() {
         return snapshot;
     }
 
+    // 下游直接当作字符串 / 字符串数组使用的字段：缺省可以，存在则类型必须正确
+    const CLASSIC_TEXT_FIELDS = Object.freeze(['tuan', 'daxiang', 'xugua', 'zagua']);
+    const CLASSIC_LIST_FIELDS = Object.freeze(['wenyan', 'notes']);
+    const APPENDIX_KEYS = Object.freeze(['xici_shang', 'xici_xia', 'shuogua', 'xugua', 'zagua']);
+
+    const isOptionalText = value => value === undefined || typeof value === 'string';
+    const isTextList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
+    const isClassicLine = line => isPlainObject(line) && hasText(line.title) && hasText(line.text) && isOptionalText(line.xiang);
+
+    function isClassicEntry(entry) {
+        return isPlainObject(entry) && hasText(entry.judgment)
+            && Array.isArray(entry.lines) && entry.lines.length === 6 && entry.lines.every(isClassicLine)
+            && (entry.extra === undefined || isClassicLine(entry.extra))
+            && CLASSIC_TEXT_FIELDS.every(field => isOptionalText(entry[field]))
+            && CLASSIC_LIST_FIELDS.every(field => entry[field] === undefined || isTextList(entry[field]));
+    }
+
     // 经传为可选增强：结构不完整时整体弃用（返回 null），不影响白话数据就绪
     function validateClassics(data) {
         if (!data) return null;
-        const valid = isPlainObject(data) && isPlainObject(data.hexagrams)
-            && Array.from({ length: 64 }, (_, index) => data.hexagrams[index + 1]).every(entry =>
-                isPlainObject(entry) && hasText(entry.judgment) && Array.isArray(entry.lines) && entry.lines.length === 6
-                && entry.lines.every(line => isPlainObject(line) && hasText(line.title) && hasText(line.text)));
+        const valid = isPlainObject(data) && hasText(data.source) && isPlainObject(data.hexagrams)
+            && Array.from({ length: 64 }, (_, index) => data.hexagrams[index + 1]).every(isClassicEntry)
+            && isPlainObject(data.appendix) && APPENDIX_KEYS.every(key => isTextList(data.appendix[key]));
         if (!valid) {
             console.warn('经传原文结构不完整，已弃用，仅显示白话数据。');
             return null;

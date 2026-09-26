@@ -225,10 +225,12 @@ function testHistoryCodecAndRendering() {
   const invalidRecord = { id: 'bad', timestamp: Date.now(), hexagramId: 999, notes: 'xss-payload' };
   const unknownVersion = { version: 999, id: 'future', timestamp: Date.now(), hexagramId: 1, lines: [], notes: '' };
   const brokenLines = { id: 'broken', timestamp: Date.now(), hexagramId: 1, lines: [7, 7, 7] };
+  // 正的有限数但超出 Date 范围：若放行，渲染时 toISOString 会抛错并拖垮整份列表
+  const outOfRange = { id: 'far-future', timestamp: 1e20, hexagramId: 1, lines: [] };
 
-  const { document, state, history } = loadHistory([maliciousLegacyRecord, invalidRecord, unknownVersion, brokenLines]);
+  const { document, state, history } = loadHistory([maliciousLegacyRecord, invalidRecord, unknownVersion, brokenLines, outOfRange]);
   const records = history.getHistoryRecords();
-  assert.equal(records.length, 1, '非法卦序、未知版本与残缺六爻必须被拒绝');
+  assert.equal(records.length, 1, '非法卦序、未知版本、残缺六爻与越界时间戳必须被拒绝');
   assert.equal(records[0].hexagram.name, '乾', '旧记录必须从 canonical 数据重新水合');
   assert.equal(MockElement.unsafeHTML, false, '持久化字段不得进入 innerHTML');
 
