@@ -115,9 +115,10 @@
   - `tools/yi/tests/*.test.mjs`：全部 4096 种六爻（64×64 本之卦）、64×3 关系、数据损坏/可选降级、无网络/无写入、浏览器词法全局、CLI 子进程及 MCP 协议边界。
   - `apps/yi/tests/validate-project.mjs`：语法扫描覆盖本机接口，统一入口纳入三套新测试；`app.js` 版本 2.2.0；更新 README、锚点与归档日志。
 - 验证步骤与结果：
-  - `node --test tools/yi/tests/*.test.mjs`：73/73 通过（API 49、CLI 5、MCP 19）；`node apps/yi/tests/validate-project.mjs`：通过（原核心 13 项、6 份浏览器/仓库契约及全部新增测试）；`git diff --check`：通过。
+  - `node --test tools/yi/tests/*.test.mjs`：75/75 通过（API 49、CLI 6、MCP 20）；`node apps/yi/tests/validate-project.mjs`：通过（原核心 13 项、6 份浏览器/仓库契约及全部新增测试）；`git diff --check`：通过。
   - 测试环境 Node 24.22.2 / Windows；未单独执行 Node 22。浏览器实际 UI 未改动；已通过原浏览器契约及 VM 词法加载回归，不冒充完整手工浏览器验收。
   - 本机 `codex mcp add yi -- <Node绝对路径> <mcp.mjs绝对路径>` 成功，`codex mcp get yi --json` 读回 enabled=true；真实子进程完成握手与全部八工具调用。当前已打开 Agent 会话是否重载，仍须以客户端实际工具发现为准。
+- 评审修正（PR #29 P2）：真实符号链接/Windows 目录联接启动时 `argv[1]` 与模块 URL 不同，原入口判定会静默退出。CLI/MCP 均改为 `realpathSync` 归一化，并各补真实联接子进程回归；修复前0条响应，修复后正常 CLI 输出与 MCP 握手/工具调用。
 - 默认值与安全边界：
   - 无第三方运行依赖、API key、网络或监听端口；仅固定仓库静态 JSON，不读取/写入浏览器 localStorage，不保存问题、占记或产生现实决策。
   - 必需卦象/八卦损坏失败关闭，可选经传缺失在 stderr 告警并退回白话；CLI 成功0/输入错误2/内部错误1，stdout与stderr分离。

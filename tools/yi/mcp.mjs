@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createYiApi, OPERATIONS, VERSION, YiInputError } from './api.mjs';
 
@@ -214,7 +214,17 @@ export async function runMcpServer({ input = process.stdin, output = process.std
     }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function isMainModule() {
+    try {
+        // npm link / 目录联接会让 argv 保留链接路径，而模块 URL 已解析到真实路径。
+        return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        // 程序化导入时 argv 也可能不是可解析的脚本路径，不应因此启动或中断服务。
+        return false;
+    }
+}
+
+if (isMainModule()) {
     try {
         await runMcpServer();
     } catch (failure) {

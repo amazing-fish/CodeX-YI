@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -80,5 +82,22 @@ test('参数错误均只写 stderr JSON、退出2且不泄漏堆栈', () => {
         const error = JSON.parse(result.stderr).error;
         assert.ok(['INVALID_INPUT', 'NOT_FOUND'].includes(error.code));
         assert.equal(Object.hasOwn(error, 'stack'), false);
+    }
+});
+
+
+test('npm link / 目录联接入口仍真正执行 CLI', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'yi-cli-linked-'));
+    try {
+        const link = join(directory, 'linked-tools');
+        symlinkSync(dirname(cli), link, 'junction');
+        const result = spawnSync(process.execPath, [join(link, 'cli.mjs'), 'info'], { cwd: tmpdir(), encoding: 'utf8', timeout: 10000, windowsHide: true });
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stderr, '');
+        assert.equal(JSON.parse(result.stdout).hexagrams, 64);
+    } finally {
+        // 只清理本测试创建的临时目录；rm 不遍历目录联接的目标。
+        rmSync(directory, { recursive: true, force: true });
     }
 });

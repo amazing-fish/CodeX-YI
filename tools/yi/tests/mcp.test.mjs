@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rmdir, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -335,6 +335,29 @@ test('真实 API 校验错误与未命中返回业务错误而不终止服务', 
     assert.equal(messages[1].result.structuredContent.error.code, 'INVALID_INPUT');
     assert.equal(messages[2].result.structuredContent.error.code, 'NOT_FOUND');
     assert.deepEqual(messages.at(-1).result, {});
+});
+
+test('通过真实目录联接启动 MCP 时仍完成握手与工具调用', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'yi-mcp-linked-'));
+    const linkedDirectory = join(directory, 'linked-yi');
+    try {
+        // Windows 创建目录联接；Unix 的 type 参数会被忽略并创建目录符号链接。
+        await symlink(dirname(mcpPath), linkedDirectory, 'junction');
+        const result = await subprocess(join(linkedDirectory, 'mcp.mjs'), {
+            raw: encode([...ready(), request(1, 'tools/list'), request(2, 'tools/call', { name: 'yi_info' })])
+        });
+        assert.equal(result.code, 0, result.stderr);
+        assert.equal(result.stderr, '');
+        const messages = parseOutput(result.stdout);
+        assert.equal(messages.length, 3, '目录联接入口不得静默退出');
+        assert.equal(messages[0].result.protocolVersion, SUPPORTED_PROTOCOL_VERSIONS[0]);
+        assert.equal(messages[1].result.tools.length, 8);
+        assert.equal(messages[2].result.structuredContent.hexagrams, 64);
+    } finally {
+        // 只删除联接本身，不遍历或删除其目标目录。
+        await unlink(linkedDirectory).catch(failure => { if (failure.code !== 'ENOENT') throw failure; });
+        await rmdir(directory);
+    }
 });
 
 test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象', async () => {
