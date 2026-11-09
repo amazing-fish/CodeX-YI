@@ -12,3 +12,5 @@
 - v1.2.0（docs）：补充 MIT 许可证与零依赖项目校验；记录问题分类、分层 PR、测试与安全边界设计；为后续 GitHub Issue 和修复提交建立可审计基线
 - v1.1.0（arch/docs）：完整梳理架构与技术路径；填充“项目地图”与“关键逻辑链路”；新增 v1.1.0 审计记录与手动验证建议；保持静态架构与 GitHub Pages 部署路径不变
 - v1.0.0（feature）：新增协作文档 `AGENTS.md` 与锚点文档 `ANCHOR.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
+
+- v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串

@@ -17,10 +17,14 @@
 - `js/modules/`：各视图与通用模块（起卦、卦典、八卦 · 易传、占记、详情弹窗、帮助、主题、提示）。
 - `data/`：`hexagrams.json`（卦名、卦画与白话）、`bagua.json`（八卦）、`zhouyi.json`（经传原文）；同名 `.js` 为同内容的回退文件，保障 `file://` 直接打开时可用。
 - `favicon.svg`：站点图标。
-- `tests/`：`yijing-core.test.mjs`（核心规则与经传数据单测）、6 份 `*-contract.mjs` 契约测试，以及统一入口 `validate-project.mjs`。
+- `tests/`：`yijing-core.test.mjs`（核心规则与经传数据单测）、6 份 `*-contract.mjs` 契约测试，以及统一入口 `validate-project.mjs`；CLI/MCP 测试位于仓库 `tools/yi/tests/`。
 
 ## 经传原文
 `data/zhouyi.json` 以王弼《周易注》为底本（[易學網校對整理本](https://gist.github.com/sui1491/52e8214c8e5f4a189b94f5ea2b8bdb05)），依 OpenCC 词典转为简体：卦名“乾”保留原字，罕用字保留繁体以免缺字；已与 [LarryZhu-dev/thebookofchanges](https://github.com/LarryZhu-dev/thebookofchanges) 逐字比对。校改之处记在对应卦的 `notes` 字段。
+
+## CLI 与本机 Agent
+
+仓库新增零依赖 Node CLI 与 stdio MCP，共享本页同一易理核心和数据校验。支持离线查卦、搜索、六爻解析、随机三钱成卦、八卦和经传附录；不接触浏览器占记。入口与接入配置见 [CLI / MCP 文档](../../tools/yi/README.md)。Node 22+ 可直接运行 `node tools/yi/cli.mjs --help`（仓库根目录）。
 
 ## 开发指南
 1. 在 `apps/yi/` 目录下启动任意静态服务器，例如 `python -m http.server 8000 --bind 127.0.0.1`。
@@ -42,7 +46,7 @@
 node apps/yi/tests/validate-project.mjs
 ```
 
-该命令检查许可证、协作文档、页面结构、数据快照与回退一致性、JavaScript 语法，并执行易理核心单测，以及静态交互、数据服务、六爻编码与内容语义、占记安全、CI 与仓库卫生契约。
+该命令检查许可证、协作文档、页面结构、数据快照与回退一致性、JavaScript 语法，并执行易理核心单测，以及静态交互、数据服务、六爻编码与内容语义、占记安全、CI、仓库卫生契约与 CLI/MCP 测试。
 
 ## 浏览器支持
 依赖原生 `<dialog>`、`color-mix()`、`:has()` 与容器查询，建议使用 2023 年以后的 Chromium、Firefox 或 Safari。主题切换的圆形晕开依赖 View Transitions，不支持时仅旋转太极后直接切换。系统开启“减少动态效果”时，太极与铜钱动画均停用。

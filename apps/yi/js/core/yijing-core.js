@@ -281,7 +281,7 @@
         return { count, changing, stable, rule, focus };
     }
 
-    root.YiCore = Object.freeze({
+    const api = Object.freeze({
         LINE_BY_SUM,
         POSITION_NAMES,
         RULES,
@@ -304,4 +304,8 @@
         fullName,
         readingGuide
     });
+
+    // 浏览器保留原全局接口；Node 通过 CommonJS 复用同一组纯函数，避免污染全局。
+    if (typeof module === 'object' && module.exports) module.exports = api;
+    else root.YiCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
