@@ -97,3 +97,48 @@
 @keyframes yao-in {
     from { opacity: 0; transform: scaleX(0.4); }
 }
+
+/* 单本卦图片：复用网页卦画与爻位标签，只增加对齐布局。 */
+.primary-figure {
+    box-sizing: border-box;
+    width: 600px;
+    padding: 28px 32px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+}
+.primary-figure-head h1 {
+    margin: 8px 0;
+    font-family: var(--font-serif);
+    font-size: 30px;
+}
+.primary-figure-head p,
+.primary-figure-legend {
+    margin: 8px 0;
+    color: var(--ink-3);
+    font-size: 13px;
+}
+.primary-figure-body {
+    display: grid;
+    grid-template-columns: 3em 104px minmax(0, 1fr);
+    align-items: center;
+    gap: 34px;
+    margin: 24px 0 18px;
+}
+.primary-figure .gua-lg { --yao-gap: 22px; }
+.primary-figure-labels,
+.primary-figure-tags {
+    display: grid;
+    grid-template-rows: repeat(6, 34px);
+}
+.primary-figure-labels > span,
+.primary-figure-tags > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.primary-figure-labels { font-family: var(--font-serif); }
+.primary-figure .pos-tags { flex-wrap: nowrap; }
+.primary-moving { color: var(--cinnabar); font-size: 11px; }
+.primary-figure .pos-summary { margin: 12px 0; }

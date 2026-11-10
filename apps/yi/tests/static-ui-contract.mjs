@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import YiView from '../js/core/hexagram-view.js';
 
 const testsRoot = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(testsRoot, '..');
@@ -103,6 +104,7 @@ function createDocument() {
 
 // 取 app.js 中 Utils … UI 的真实实现（仅对象定义，不执行启动逻辑）
 function loadAppHelpers(sandbox) {
+  vm.runInContext(`${read('js/core/hexagram-view.js')}\nglobalThis.YiView = window.YiView;`, sandbox);
   const start = appSource.indexOf('const Utils = {');
   const end = appSource.indexOf('// 基于 hash 的视图路由', start);
   assert.ok(start >= 0 && end > start, '应能定位 app.js 的工具与 UI 实现');
@@ -310,6 +312,32 @@ async function testPendingThrowIsCancelled() {
   assert.equal(errors.length, 0, '取消旧投掷不应产生运行时错误');
 }
 
+function testSharedHexagramView() {
+  const sandbox = createSandbox({});
+  loadAppHelpers(sandbox);
+  assert.equal(sandbox.UI.figure, sandbox.YiView.figure, '网页须直接委托共享卦画实现');
+  assert.equal(sandbox.UI.positionTags, sandbox.YiView.positionTags, '网页须直接委托共享标记实现');
+  const hexagram = { id: 63, name: '既济', fullName: '水火既济', binary: '010101', upperTrigram: '坎', lowerTrigram: '离' };
+  const values = [9, 6, 7, 8, 7, 8];
+  const html = YiView.primaryFigure(hexagram, values);
+  assert.equal(html, sandbox.YiView.primaryFigure(hexagram, values), '浏览器与 Node 共用同一 DOM');
+  assert.equal((html.match(/class="gua gua-lg"/g) || []).length, 1, '图片只含本卦');
+  assert.equal((html.match(/class="yao /g) || []).length, 6);
+  assert.equal((html.match(/class="pos-tags"/g) || []).length, 6);
+  assert.equal((html.match(/>居中</g) || []).length, 2);
+  assert.equal((html.match(/class="primary-moving"/g) || []).length, 2);
+  assert.ok(html.includes('六爻皆当位，三组皆应'));
+  assert.ok(html.indexOf('data-position="6"') < html.indexOf('data-position="1"'));
+  assert.ok(!html.includes('之卦') && !html.includes('错卦'));
+  assert.ok(YiView.primaryFigure({ ...hexagram, fullName: '<script>坏</script>' }, values).includes('&lt;script&gt;'));
+  assert.throws(() => YiView.primaryFigure(hexagram, [8, 6, 7, 8, 7, 8]), /不一致/);
+  assert.throws(() => YiView.primaryFigure(hexagram, [9]), /六爻数值/);
+  const scripts = read('index.html');
+  assert.ok(scripts.indexOf('js/core/yijing-core.js') < scripts.indexOf('js/core/hexagram-view.js'));
+  assert.ok(scripts.indexOf('js/core/hexagram-view.js') < scripts.indexOf('js/app.js'));
+}
+
+testSharedHexagramView();
 testStaticOwnershipAndStartupContracts();
 testThemeSwitchContract();
 await testSearchContract();

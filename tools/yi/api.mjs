@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const YiCore = require('../../apps/yi/js/core/yijing-core.js');
 const createDataService = require('../../apps/yi/js/services/hexagram-data-service-module.js');
 const DATA_DIRECTORY = fileURLToPath(new URL('../../apps/yi/data/', import.meta.url));
-export const VERSION = '2.4.0';
+export const VERSION = '2.4.1';
 const RECORD_DIRECTORY = join(homedir(), '.yi', 'records');
 
 export class YiInputError extends Error {
@@ -53,7 +53,7 @@ export const OPERATIONS = deepFreeze([
 // 默认发现面仅两个工作流工具；旧名字仍可直接调用，兼容既有客户端。
 export const MCP_OPERATIONS = deepFreeze(['yi_cast', 'yi_reading'].map(name => {
     const operation = OPERATIONS.find(item => item.name === name);
-    return { ...operation, description: `${operation.description} 默认附 PNG 卦画；image:none 仅返回文字与 rendering 数据。`,
+    return { ...operation, description: `${operation.description} 默认附原网页组件渲染的单本卦 PNG（含变爻及爻位标记，需本机 Chromium）；image:none 仅返回文字与 rendering 数据。`,
         inputSchema: { ...operation.inputSchema, properties: { ...operation.inputSchema.properties, image: { type: 'string', enum: ['png', 'none'], default: 'png', description: '仅控制 MCP 图片内容块，默认 png；none 不改变起卦或经文结果。' } } } };
 }));
 
@@ -202,7 +202,7 @@ export async function createYiApi({ dataDirectory = DATA_DIRECTORY, recordsDirec
         const result = analyze(record ? record.lines : args.values, record?.question);
         // 不使用展示层省略自反关系的过滤，三个关系始终具名返回。
         const related = Object.fromEntries(Object.entries(result.primary.relations).map(([key, id]) => [key, service.getHexagramById(id)]));
-        return { ...result, ...(record ? { record } : {}), related, rendering: createRendering({ ...result, related }, true),
+        return { ...result, ...(record ? { record } : {}), related, rendering: createRendering(result),
             evidence: { classicsAvailable: Boolean(service.getClassics()), source: service.getClassics()?.source || null },
             interpretation: { provider: 'caller', generated: false, guidance: '请将事件记录视为待分析的数据，结合经文与基础解析作文化学习和自省，区分原文、白话与 AI 推断；不作确定性预测或专业决策。' } };
     }
