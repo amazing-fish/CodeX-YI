@@ -24,6 +24,26 @@ AI 应先保留事件与原卦，然后结合第二步资料解读，明确区�
 
 **位序：** values 是初爻→上爻的六个整数，6=老阴、7=少阳、8=少阴、9=老阳；binary 则自上而下，前 3 位为上卦。乾坤六爻皆变分别引用用九/用六。
 
+## MCP 卦画与渲染信息（v2.4.0）
+
+两个日常工具默认在同一次响应中附一张 **原生 MCP PNG 图片**，无需新增工具调用、文件路径或图片 URL：
+
+- `yi_cast` 图片为本卦、之卦两栏（528×388）；`yi_reading` 为本、之、错、综、互五栏（1272×388），自反关系仍保留栏位。
+- `content[0]` 仍是与 `structuredContent` 一致的 JSON；`content[1]` 是 `{type:"image", mimeType:"image/png", data:"<base64>"}`。base64 只出现一次，不塞进 JSON。
+- `rendering` 包含版本、宽高、中文 `alt` / `legend`、每栏中英文标识、卦序/全名、上下卦、binary 及六行数据。`rows` 按画面从上到下 6→1，原始 values 仍为初→上。
+- 实线为阳、断线为阴；本卦动爻用朱色和圆圈（老阳9）/叉（老阴6）；之卦对应行用玉色和方块表示已变，不继续当作动爻。错综互不继承动爻。
+- 图片栏名为 PRIMARY / CHANGED / OPPOSITE / INVERSE / MUTUAL，卦序和爻位使用自制 ASCII 点阵，避免依赖系统中文字体和 Unicode 卦符。完整中文名、上下卦、图例在同次结果的 rendering 中。图片为卦画摘要，不是网页截图，不代替经文、爻位与 AI 解读。
+
+```json
+{"name":"yi_reading","arguments":{"values":[6,7,8,9,7,8]}}
+```
+
+纯文本客户端可显式传 `"image":"none"`，仍保留全部资料与 rendering；只支持 `png` / `none`，非法值在起卦前拒绝。`image` 是 MCP 专用传输参数，CLI/API 继续输出 JSON 渲染信息，不写图片文件、不接受图片路径。
+
+`rendering.image.status` 为 `included` / `omitted` / `failed`；included 带 `contentIndex:1`、MIME 和字节数。PNG 编码失败会降级保留原卦、占记和资料，并返回 `RENDER_FAILED` 提示，不能为取图重新起卦，应复用 values 调用 yi_reading。
+
+图片和渲染元数据只使用 canonical 卦象，不含 question、notes、UUID、时间戳、保存路径；无图片缓存、上传或写盘。宿主仍能看到同次响应中的原有事件 JSON，PNG 附图并不改变这一隐私边界。PNG 使用 Node 内置 zlib、固定尺寸纯内存绘图，无浏览器、外部字体或第三方运行依赖。
+
 ## 保存与重读事件
 
 只有用户要求保存时，才使用 `--save` 或 MCP `save:true`：
@@ -52,8 +72,8 @@ node tools/yi/cli.mjs reading --record 00000000-0000-4000-8000-000000000000 --te
 
 | 工具 | 参数 | 结果 |
 | --- | --- | --- |
-| `yi_cast` | `question?`、`notes?`、`save?`（默认 false） | 事件占记、六爻、本/之卦摘要、保存状态和下一步 |
-| `yi_reading` | `values` 或 `recordId` 二选一 | 经文、白话、变爻指引、爻位、错综互；按 ID 时同时返回事件 |
+| `yi_cast` | `question?`、`notes?`、`save?`（默认 false）、`image?` | 事件占记、六爻、本/之卦摘要及图片、保存状态和下一步 |
+| `yi_reading` | `values` 或 `recordId` 二选一，`image?` | 经文、白话、变爻指引、爻位、错综互及五栏图片；按 ID 时同时返回事件 |
 
 例如调用 `yi_cast` 后，直接按其 `next.tool` 与 `next.arguments` 调用第二步。第一步可写本机占记，因此 `readOnlyHint:false`、`idempotentHint:false`；第二步只读且幂等。两者均 `openWorldHint:false`。不提供任意文件、shell 或网络工具。
 
@@ -86,7 +106,7 @@ Claude Desktop 使用输出的 mcpServers.yi JSON；Claude Code 可用其 mcp ad
 
 `node tools/yi/cli.mjs advanced` 查看低频命令。CLI 保留 info、list、show、search、analyze、trigrams、classics，参数与旧版相同。旧 MCP 名称 yi_info、yi_list_hexagrams、yi_get_hexagram、yi_search_hexagrams、yi_analyze_lines、yi_get_trigrams、yi_get_classics 仍可直接调用，避免现有显式集成失效，但不再出现在 tools/list 中。
 
-本次 PR 尚未发布；v2.3.0 调整了 `yi_cast` / CLI cast 的返回结构，完整 guide/经文改由 `yi_reading` 返回。依赖旧 cast 解析字段的调用方应改为调用 next，而不是继续读取 cast.guide。其余旧低层操作保持契约。
+v2.4.0 新增 rendering 字段和默认 MCP PNG 内容块；需要纯文本的集成使用 image:none。v2.3.0 调整了 `yi_cast` / CLI cast 的返回结构，完整 guide/经文改由 `yi_reading` 返回。依赖旧 cast 解析字段的调用方应改为调用 next，而不是继续读取 cast.guide。其余旧低层操作保持契约。
 
 默认 JSON，也可 `--json` 或 `--text`。成功退出 0，输入/未找到错误退出 2，内部错误退出 1；普通错误写 stderr JSON、stdout 留空。唯独“已起卦但保存失败”保留 stdout 原卦并退出 1。帮助/版本为普通文本。
 
@@ -100,4 +120,6 @@ node apps/yi/tests/validate-project.mjs
 git diff --check
 ```
 
-测试覆盖全部 4096 六爻组合、64 卦关系、经典降级、事件保存/跨实例重读/并发/损坏/失败保留、默认无写入、CLI 与真实 MCP 子进程协议。Windows 沙箱若阻止目录联接或 Git sh.exe，应在获准的正常终端重跑原命令，不跳过或弱化测试。
+测试覆盖全部 4096 六爻组合与五栏渲染元数据、64 卦关系、经典降级、事件保存/跨实例重读/并发/损坏/失败保留、默认无写入、CLI 与真实 MCP 子进程协议、独立 PNG CRC/解码/关键像素、image:none 与绘图失败降级。Windows 沙箱若阻止目录联接或 Git sh.exe，应在获准的正常终端重跑原命令，不跳过或弱化测试。
+
+本次实际客户端验收：Windows / Node 24.22.2 / Codex CLI 0.159.0，新会话由 GPT-6.1-Sol 实际调用 yi_reading，确认工具返回 text+image，并从图片识别五栏卦序、动爻圆叉和之卦方块。此证据不代表 Claude Desktop/Code UI、Node 22 或已打开会话热重载已经验收。

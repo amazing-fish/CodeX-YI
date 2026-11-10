@@ -167,7 +167,8 @@ function validateTestSuites() {
     'apps/yi/tests/repository-hygiene-contract.mjs',
     'tools/yi/tests/api.test.mjs',
     'tools/yi/tests/cli.test.mjs',
-    'tools/yi/tests/mcp.test.mjs'
+    'tools/yi/tests/mcp.test.mjs',
+    'tools/yi/tests/render.test.mjs'
   ];
 
   for (const suite of suites) {

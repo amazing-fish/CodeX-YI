@@ -16,3 +16,5 @@
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 
 - v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
+
+- v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA

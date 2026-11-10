@@ -16,7 +16,7 @@
   - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
   - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
   - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
-- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，AI 解读由调用方生成。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
+- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，两者附原生 PNG 卦画与 rendering 资料（image:none 可关图）；`tools/yi/render.mjs` 零依赖内存绘图，不写图片且不嵌入事件，AI 解读由调用方生成。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
 - 支撑模块：
   - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
   - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
@@ -74,6 +74,8 @@
 
 ## 最近14个版本变更日志
 
+- v2.4.0（feature）：MCP 两工具默认附原生 PNG 卦画；共享中文 rendering 数据、纯文本选项、动爻/变后标记与图片失败保留原卦，零第三方依赖且不写图片
+
 - v2.3.0（feature）：CLI/MCP 收敛为起卦记事、经文解析两步；可显式本机保存并按 ID 重读，完整返回错综互，AI 解读由调用方基于事件与资料生成
 - v2.2.0（feature）：新增离线 CLI 与 stdio MCP，复用易理核心和数据服务；提供八项只读工具、严格参数校验、本机配置生成及全组合/协议测试，浏览器接口与占记边界保持不变
 - v2.1.2（bugfix）：主题切换去掉强制同步样式重算（地址栏色改取常量），切换两帧内暂停全站颜色过渡；4 倍降速下长任务总时长约减 56%，并以契约固定地址栏色与 `--paper` 一致
@@ -87,7 +89,6 @@
 - v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
-- v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -103,6 +104,19 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.4.0
+
+- 变更版本：v2.4.0（feature），基于已合并 PR #29 的 main 33df237，延续 #28 的本机接口。
+- 目标：MCP 传递关键卦画图片及可复用中文渲染数据，保持两工具发现与现有隐私边界。
+- 变更文件与摘要：
+  - `tools/yi/render.mjs`：canonical 卦象场景、固定大小 RGB PNG/CRC/zlib、自制 ASCII 点阵；本之二栏或本之错综互五栏，实断线、圆叉动爻及方块变后标记，图片不含事件/身份。
+  - `tools/yi/api.mjs` / `mcp.mjs`：加 rendering，MCP 专用 image:png/none；保留 JSON 文本与 structuredContent，只附一份 base64，PNG 失败仍返回原卦，不重新起卦。
+  - `tools/yi/tests/render.test.mjs` / `mcp.test.mjs` / `cli.test.mjs` 与统一验证入口：4096 图形组合、PNG 独立 CRC/像素、双协议真实子进程、关闭图片、坏参数、失败降级和新版本断言。
+  - 接入 README、应用 README、版本元数据与归档日志同步。
+- 验证：Windows / Node 24.22.2，`node --test tools/yi/tests/*.test.mjs` 89/89 通过；目录联接测试在沙箱 EPERM 后获准普通终端重跑，没有跳过测试。`node apps/yi/tests/validate-project.mjs` 全部通过（原核心13项、6份契约及89项接口/图像测试），`git diff --check` 通过。Codex CLI 0.159.0 / GPT-6.1-Sol xhigh fast 的新会话实际调用 yi_reading 收到 text+image，正确读取五栏卦序与圆叉/方块。独立只读审查复核4096组合、PNG CRC与失败降级，无可复现阻断问题。
+- 取舍与限制：PNG 用英文栏名与卦序避免字体依赖，中文全名/上下卦/图例在同次结果 rendering 内；图为关键卦画摘要，不是网页截图。默认不存图片，宿主仍可见原事件 JSON。CLI/API 返回渲染数据，不生成图片文件；旧高级操作不新增图片。图片编码故障可降级，不声称阻止进程崩溃或内存耗尽等系统故障。
+- 未自动合并或部署；浏览器交互不变。Node 22、Claude UI 与当前已打开 Agent 会话热重载未单独验收。
 
 ## 审计记录：v2.3.0
 

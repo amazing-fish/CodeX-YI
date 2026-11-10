@@ -34,11 +34,11 @@ function parseOutput(text) {
     }) : [];
 }
 
-async function transcript(messages, { api = stubApi, fragments, raw } = {}) {
+async function transcript(messages, { api = stubApi, fragments, raw, renderImage } = {}) {
     const input = new PassThrough();
     const output = collector();
     const errors = collector();
-    const running = runMcpServer({ input, output: output.stream, error: errors.stream, api });
+    const running = runMcpServer({ input, output: output.stream, error: errors.stream, api, renderImage });
     const bytes = Buffer.from(raw ?? encode(messages));
     if (fragments) {
         for (let offset = 0; offset < bytes.length; offset += fragments) {
@@ -367,6 +367,7 @@ test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象
     const fixtureApi = join(directory, 'api.mjs');
     try {
         await writeFile(fixtureMcp, await readFile(mcpPath));
+        await writeFile(join(directory, 'render.mjs'), await readFile(new URL('../render.mjs', import.meta.url)));
         await writeFile(fixtureApi, `export const OPERATIONS = [];\nexport const MCP_OPERATIONS = [];\nexport const VERSION = 'test';\nexport class YiInputError extends Error {}\nexport async function createYiApi() { throw new Error('测试初始化失败'); }\n`);
         const result = await subprocess(fixtureMcp);
         assert.equal(result.code, 1);
@@ -375,6 +376,7 @@ test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象
     } finally {
         await unlink(fixtureMcp).catch(() => {});
         await unlink(fixtureApi).catch(() => {});
+        await unlink(join(directory, 'render.mjs')).catch(() => {});
         await rmdir(directory);
     }
 });
@@ -395,4 +397,63 @@ test('真实 API 的两步工作流保留事件并返回可供 AI 解读的完�
     assert.ok(reading.guide.readings.length);
     assert.equal(reading.interpretation.generated, false);
     assert.equal(first.stderr + second.stderr, '');
+});
+
+test('两种协议的真实 stdio 子进程默认返回原生 PNG 且 JSON 不重复 base64', async () => {
+    for (const version of SUPPORTED_PROTOCOL_VERSIONS) {
+        const result = await subprocess(mcpPath, { raw: encode([...ready(version),
+            request(1, 'tools/call', { name: 'yi_cast', arguments: { question: '合成测试事件' } }),
+            request(2, 'tools/call', { name: 'yi_reading', arguments: { values: [6, 7, 8, 9, 7, 8] } })]) });
+        assert.equal(result.code, 0);
+        assert.equal(result.stderr, '');
+        for (const message of parseOutput(result.stdout).slice(1)) {
+            const { content, structuredContent, isError } = message.result;
+            assert.equal(isError, false);
+            assert.deepEqual(JSON.parse(content[0].text), structuredContent);
+            assert.equal(content.length, 2);
+            assert.equal(content[1].type, 'image');
+            assert.equal(content[1].mimeType, 'image/png');
+            assert.deepEqual([...Buffer.from(content[1].data, 'base64').subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+            assert.equal(structuredContent.rendering.image.contentIndex, 1);
+            assert.equal(structuredContent.rendering.image.bytes, Buffer.from(content[1].data, 'base64').length);
+            assert.ok(!content[0].text.includes(content[1].data));
+            assert.ok(Buffer.byteLength(JSON.stringify(message)) < MAX_MESSAGE_BYTES);
+        }
+    }
+});
+
+test('关闭图片保留渲染数据；非法图片选项与原始参数均失败且服务可继续', async () => {
+    const api = await createYiApi();
+    const values = [7, 7, 7, 7, 7, 7];
+    const { messages } = await transcript([...ready(),
+        request(1, 'tools/call', { name: 'yi_reading', arguments: { values, image: 'none' } }),
+        ...['svg', true, null, {}].map((image, index) => request(index + 2, 'tools/call', { name: 'yi_cast', arguments: { image } })),
+        request(6, 'tools/call', { name: 'yi_reading', arguments: { values, image: 'png', path: 'private' } }),
+        request(7, 'tools/call', { name: 'yi_reading', arguments: { values, image: 'png' } })], { api });
+    assert.equal(messages[1].result.content.length, 1);
+    assert.equal(messages[1].result.structuredContent.rendering.image.status, 'omitted');
+    assert.equal(messages[1].result.structuredContent.rendering.figures.length, 5);
+    for (const message of messages.slice(2, 7)) {
+        assert.equal(message.result.isError, true);
+        assert.equal(message.result.content.length, 1);
+    }
+    assert.equal(messages[7].result.content[1].type, 'image');
+});
+
+test('绘图失败保留原卦与占记，不触发再次起卦或伪装成工具整体失败', async () => {
+    let calls = 0;
+    const real = await createYiApi();
+    const api = { async invoke(...args) { calls += 1; return real.invoke(...args); } };
+    const { messages } = await transcript([...ready(), request(1, 'tools/call', { name: 'yi_cast', arguments: { question: '原卦不可丢失' } })], {
+        api, renderImage() { throw new Error('合成绘图失败'); }
+    });
+    const result = messages[1].result;
+    assert.equal(calls, 1);
+    assert.equal(result.isError, false);
+    assert.equal(result.content.length, 1);
+    assert.equal(result.structuredContent.record.question, '原卦不可丢失');
+    assert.equal(result.structuredContent.values.length, 6);
+    assert.equal(result.structuredContent.rendering.image.status, 'failed');
+    assert.match(result.structuredContent.rendering.image.message, /不要重新起卦/);
+    assert.equal(result.structuredContent.storage.status, 'not_saved');
 });

@@ -22,7 +22,7 @@ function json(...args) {
 test('帮助、版本与 cwd 无关的 JSON 输出', () => {
     assert.match(run('--help').stdout, /初爻→上爻/);
     assert.match(run('help').stdout, /stdio MCP/);
-    assert.equal(run('--version').stdout.trim(), '2.3.0');
+    assert.equal(run('--version').stdout.trim(), '2.4.0');
     assert.equal(json('info').hexagrams, 64);
     assert.equal(json('info', '--json').lineOrder, 'bottom-to-top');
     assert.equal(json('list', '--limit', '2', '--offset', '62').items[1].id, 64);
