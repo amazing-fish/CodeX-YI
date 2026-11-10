@@ -16,13 +16,13 @@ const dataDirectory = fileURLToPath(new URL('../../../apps/yi/data/', import.met
 const apiUrl = new URL('../api.mjs', import.meta.url).href;
 const datasets = Object.fromEntries(await Promise.all(['hexagrams', 'bagua', 'zhouyi'].map(async name => [name, JSON.parse(await readFile(join(dataDirectory, `${name}.json`), 'utf8'))])));
 const api = await createYiApi();
-const operationNames = ['yi_info', 'yi_list_hexagrams', 'yi_get_hexagram', 'yi_search_hexagrams', 'yi_analyze_lines', 'yi_cast', 'yi_get_trigrams', 'yi_get_classics'];
+const operationNames = ['yi_info', 'yi_list_hexagrams', 'yi_get_hexagram', 'yi_search_hexagrams', 'yi_analyze_lines', 'yi_cast', 'yi_get_trigrams', 'yi_get_classics', 'yi_reading'];
 const appendixNames = ['xici_shang', 'xici_xia', 'shuogua', 'xugua', 'zagua'];
 const trigramBinaries = { 乾: '111', 坤: '000', 震: '001', 巽: '110', 坎: '010', 离: '101', 艮: '100', 兑: '011' };
 const validArguments = {
     yi_info: {}, yi_list_hexagrams: {}, yi_get_hexagram: { id: 1 },
     yi_search_hexagrams: { query: '乾' }, yi_analyze_lines: { values: [7, 8, 7, 8, 7, 8] },
-    yi_cast: {}, yi_get_trigrams: {}, yi_get_classics: {}
+    yi_cast: {}, yi_get_trigrams: {}, yi_get_classics: {}, yi_reading: { values: [7, 8, 7, 8, 7, 8] }
 };
 
 async function invalid(name, args, code = 'INVALID_INPUT') {
@@ -113,7 +113,7 @@ function assertAnalysis(result, values) {
     });
 }
 
-test('八个操作元数据保持只读、封闭 schema 与正确副作用标记', () => {
+test('操作元数据保持封闭 schema 与正确副作用标记', () => {
     assert.deepEqual(OPERATIONS.map(item => item.name), operationNames);
     const assertFrozen = value => {
         if (value === null || typeof value !== 'object') return;
@@ -125,11 +125,11 @@ test('八个操作元数据保持只读、封闭 schema 与正确副作用标记
         assert.equal(operation.inputSchema.type, 'object');
         assert.equal(operation.inputSchema.additionalProperties, false);
         assert.ok(operation.description.length > 0);
-        assert.deepEqual(operation.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: operation.name !== 'yi_cast', openWorldHint: false });
+        assert.deepEqual(operation.annotations, { readOnlyHint: operation.name !== 'yi_cast', destructiveHint: false, idempotentHint: operation.name !== 'yi_cast', openWorldHint: false });
     }
 });
 
-test('info 报告版本、八工具、数据规模及双向位序', async () => {
+test('info 报告版本、操作与两步流程、数据规模及双向位序', async () => {
     const info = await api.invoke('yi_info');
     assert.equal(info.version, VERSION);
     assert.equal(info.schemaVersion, 1);
@@ -141,7 +141,8 @@ test('info 报告版本、八工具、数据规模及双向位序', async () => 
     assert.equal(info.binaryOrder, 'top-to-bottom');
     assert.deepEqual(info.lineValues, { 6: '老阴', 7: '少阳', 8: '少阴', 9: '老阳' });
     assert.match(info.scope, /文化学习/);
-    assert.match(info.scope, /无网络和历史存储/);
+    assert.match(info.scope, /默认不保存/);
+    assert.deepEqual(info.workflow, ['yi_cast', 'yi_reading']);
 });
 
 test('列表按文王卦序返回 64 卦且分页边界不丢不重', async () => {
@@ -270,12 +271,17 @@ test('随机三钱起卦均为合法六爻，其分析与相同六爻重放完�
         const cast = await api.invoke('yi_cast', { question });
         assert.equal(cast.values.length, 6);
         assert.ok(cast.values.every(value => [6, 7, 8, 9].includes(value)));
-        assertAnalysis(cast, cast.values);
-        assert.deepEqual(cast, await api.invoke('yi_analyze_lines', { values: cast.values, question }));
+        const reading = await api.invoke(cast.next.tool, cast.next.arguments);
+        assertAnalysis(reading, cast.values);
+        assert.equal(cast.primary.id, reading.primary.id);
+        assert.equal(cast.changed.id, reading.changed.id);
+        assert.equal(cast.record.question, question);
+        assert.deepEqual(cast.record.lines, cast.values);
+        assert.equal(cast.storage.status, 'not_saved');
     }
 });
 
-test('八工具拒绝非对象参数、未知属性及 transport 不支持的数据路径', async () => {
+test('所有操作拒绝非对象参数、未知属性及 transport 不支持的数据路径', async () => {
     for (const name of operationNames) {
         for (const args of [null, [], 'text', 0, false, new Date(), new Map()]) await invalid(name, args);
         for (const extra of [{ unknown: true }, { dataDirectory: dataDirectory }, JSON.parse('{"__proto__":{}}')]) {
@@ -312,7 +318,7 @@ test('程序化调用拒绝缺槽数组和继承的必填字段，允许普通�
     const result = await api.invoke('yi_analyze_lines', input);
     assert.equal(result.question, input.question);
     assert.deepEqual(result.values, values);
-    assert.equal((await api.invoke('yi_cast', { question: '😀'.repeat(500) })).question.length, 1000);
+    assert.equal((await api.invoke('yi_cast', { question: '😀'.repeat(500) })).record.question.length, 1000);
     await invalid('yi_cast', { question: '😀'.repeat(501) });
     await invalid('yi_search_hexagrams', { query: '😀'.repeat(201) });
 });
@@ -503,7 +509,7 @@ test('浏览器兼容：词法 const YizhiApp 与 window/词法 YiCore 均能正
     }
 });
 
-test('冷启动与八工具调用仅读取固定本地 JSON，不联网、不碰浏览器对象或历史、不写文件', () => {
+test('冷启动与所有默认操作调用仅读取固定本地 JSON，不联网、不碰浏览器对象或历史、不写文件', () => {
     const script = `
         import assert from 'node:assert/strict';
         import fs from 'node:fs/promises';
@@ -547,4 +553,79 @@ test('六爻数组拒绝 getter、自定义方法和继承槽位，不执行外�
     for (const values of [accessor, customMap, inherited]) await invalid('yi_analyze_lines', { values });
     assert.equal(calls, 0);
     assert.equal((await api.invoke('yi_analyze_lines', { values: Object.freeze([7, 7, 7, 7, 7, 7]) })).primary.id, 1);
+});
+
+
+test('第二步一次提供经文、白话、爻位和完整错综互（含自反关系）', async () => {
+    for (const item of (await api.invoke('yi_list_hexagrams')).items) {
+        const values = [...item.binary].reverse().map(bit => bit === '1' ? 7 : 8);
+        const reading = await api.invoke('yi_reading', { values });
+        assertAnalysis(reading, values);
+        assert.deepEqual(Object.keys(reading.related).sort(), ['inverse', 'mutual', 'opposite']);
+        for (const [kind, related] of Object.entries(reading.related)) {
+            assert.equal(related.id, reading.primary.relations[kind]);
+            assert.ok(related.classic.judgment);
+            assert.ok(related.explanation);
+        }
+        assert.equal(reading.interpretation.provider, 'caller');
+        assert.equal(reading.interpretation.generated, false);
+        assert.equal(reading.evidence.classicsAvailable, true);
+    }
+});
+
+test('显式保存占记、跨实例按 ID 重读且不改变原卦，文件不复制经文或 AI 解读', async t => {
+    const directory = await fixture(t, async () => {});
+    const recordsDirectory = join(directory, 'records');
+    const first = await createYiApi({ recordsDirectory });
+    const cast = await first.invoke('yi_cast', { question: '  学习方向  ', notes: '事件背景\u0000', save: true });
+    assert.equal(cast.storage.status, 'saved');
+    assert.equal(cast.storage.path, join(recordsDirectory, `${cast.record.id}.json`));
+    assert.deepEqual(JSON.parse(await readFile(cast.storage.path, 'utf8')), [cast.record]);
+    assert.deepEqual(Object.keys(cast.record).sort(), ['version', 'id', 'timestamp', 'question', 'notes', 'lines', 'hexagramId', 'source'].sort());
+    assert.equal(cast.record.question, '学习方向');
+    assert.equal(cast.record.notes, '事件背景');
+    const second = await createYiApi({ recordsDirectory });
+    const reread = await second.invoke('yi_reading', { recordId: cast.record.id });
+    assertAnalysis(reread, cast.values);
+    assert.deepEqual(reread.record, cast.record);
+    assert.equal(reread.question, cast.record.question);
+    assert.deepEqual(reread.primary, (await first.invoke('yi_reading', { values: cast.values })).primary);
+});
+
+test('默认不创建占记目录；保存失败仍返回已起原卦和可复制记录', async t => {
+    const directory = await fixture(t, async () => {});
+    const recordsDirectory = join(directory, 'absent');
+    const first = await createYiApi({ recordsDirectory });
+    assert.equal((await first.invoke('yi_cast', { question: '不应写入' })).storage.status, 'not_saved');
+    await assert.rejects(readFile(recordsDirectory), { code: 'ENOENT' });
+    const blockedDirectory = join(directory, 'blocked');
+    await writeFile(blockedDirectory, 'not a directory');
+    const blocked = await createYiApi({ recordsDirectory: blockedDirectory });
+    const cast = await blocked.invoke('yi_cast', { question: '保留结果', save: true });
+    assert.equal(cast.storage.status, 'failed');
+    assert.equal(cast.storage.code, 'SAVE_FAILED');
+    assert.equal(cast.record.question, '保留结果');
+    assertAnalysis(await blocked.invoke(cast.next.tool, cast.next.arguments), cast.values);
+});
+
+test('并发保存不覆盖，占记格式损坏、引用篡改、目录与超大文件均拒绝', async t => {
+    const directory = await fixture(t, async () => {});
+    const local = await createYiApi({ recordsDirectory: directory });
+    const casts = await Promise.all(Array.from({ length: 8 }, (_, index) => local.invoke('yi_cast', { question: `并发 ${index}`, save: true })));
+    assert.equal(new Set(casts.map(cast => cast.record.id)).size, 8);
+    for (const cast of casts) {
+        assert.equal(cast.storage.status, 'saved');
+        assert.deepEqual((await local.invoke('yi_reading', { recordId: cast.record.id })).record, cast.record);
+    }
+    const { record, storage } = casts[0];
+    for (const payload of ['{', '[]', JSON.stringify([{ ...record, version: 2 }]), JSON.stringify([{ ...record, hexagramId: record.hexagramId === 1 ? 2 : 1 }]), JSON.stringify([{ ...record, timestamp: 8640000000000001 }]), JSON.stringify([{ ...record, id: casts[1].record.id }]), ' '.repeat(16385)]) {
+        await writeFile(storage.path, payload);
+        await assert.rejects(local.invoke('yi_reading', { recordId: record.id }), YiInputError);
+    }
+    await assert.rejects(local.invoke('yi_reading', { recordId: '00000000-0000-4000-8000-000000000000' }), error => error.code === 'NOT_FOUND');
+});
+
+test('两个工作流工具严格拒绝路径、选择器冲突、非布尔保存和畸形事件', async () => {
+    for (const args of [{}, { values: [7] }, { recordId: '../history' }, { recordId: 'C:\\private.json' }, { recordId: '00000000-0000-4000-8000-000000000000', values: [7, 7, 7, 7, 7, 7] }]) await invalid('yi_reading', args);
+    for (const args of [{ save: 'true' }, { save: 1 }, { notes: null }, { notes: '字'.repeat(501) }, { path: 'history.json' }, { values: [7, 7, 7, 7, 7, 7] }]) await invalid('yi_cast', args);
 });

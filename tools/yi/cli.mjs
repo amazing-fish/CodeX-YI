@@ -7,22 +7,31 @@ import { createYiApi, VERSION, YiInputError } from './api.mjs';
 const HELP = `易之 YI ${VERSION} · 离线 CLI / MCP（Node >=22）
 用法：node tools/yi/cli.mjs <命令> [参数]
 
-  info                         版本、数据规模、位序与能力
-  list [--offset 0] [--limit 64] 列出卦象摘要
-  show <卦序|卦名|六位卦画>     查询卦象全文和错综互
-       或 --id / --name / --binary / --upper + --lower
-  search <关键词> [--limit 10]  搜索卦名、卦辞、爻辞、经传
-  analyze <6,7,8,9,7,8>         按初爻→上爻分析六爻（也可 --lines）
-  cast [--question 所问]        三钱法随机成卦，不保存占记
-  trigrams [--name 乾]          八卦属性
-  classics [--section shuogua]  经传出处及附录
+日常只需两步，再交给调用方 AI 解读：
+  cast --question 所问 [--notes 事件背景] [--save]
+                               三钱起卦＋事件占记；默认不落盘
+  reading <6,7,8,9,7,8>         经文、白话、变爻指引、爻位与错综互
+          或 --record <占记ID>  重读已明确保存的本机占记，不重新起卦
+
+  advanced                     查看兼容的高级查询命令
   agent-config [--client codex|claude]  输出本机 MCP 配置，不修改设置
   mcp                          启动 stdio MCP，stdout 仅协议
 
-默认输出 JSON；--text 输出便读文本；--json 显式使用 JSON。
-分析可选 --question；--help 查看帮助；--version 查看版本。
-爻值：6老阴、7少阳、8少阴、9老阳。六位卦画则按上爻→初爻。
-仅供文化学习与自省，不提供现实预测或专业决策。`;
+默认 JSON；--text 便读文本；--json 显式 JSON；--version 版本。
+六爻顺序初爻→上爻：6老阴、7少阳、8少阴、9老阳。
+--save 才把事件和六爻保存到本机 ~/.yi/records，明文且不加密。
+AI 解读由调用方完成。仅供文化学习与自省，不提供现实预测或专业决策。`;
+
+const ADVANCED_HELP = `兼容的高级命令（MCP 不再默认列出）：
+  info                         版本、数据规模、位序与能力
+  list [--offset 0] [--limit 64] 列出卦象摘要
+  show <卦序|卦名|六位卦画>     查询全文与关系卦
+       或 --id / --name / --binary / --upper + --lower
+  search <关键词> [--limit 10]  搜索卦名、卦辞、爻辞、经传
+  analyze <6,7,8,9,7,8>         旧六爻分析（支持 --lines / --question）
+  trigrams [--name 乾]          八卦属性
+  classics [--section shuogua]  经传出处及附录
+六位 binary 自上而下。新流程请优先 cast → reading。`;
 
 const COMMANDS = {
     info: { operation: 'yi_info', options: {} },
@@ -30,7 +39,9 @@ const COMMANDS = {
     show: { operation: 'yi_get_hexagram', options: { id: 'integer', name: 'string', binary: 'string', upper: 'string', lower: 'string' }, positional: 'selector' },
     search: { operation: 'yi_search_hexagrams', options: { limit: 'integer' }, positional: 'query' },
     analyze: { operation: 'yi_analyze_lines', options: { lines: 'string', question: 'string' }, positional: 'values' },
-    cast: { operation: 'yi_cast', options: { question: 'string' } },
+    cast: { operation: 'yi_cast', options: { question: 'string', notes: 'string', save: 'boolean' } },
+    reading: { operation: 'yi_reading', options: { lines: 'string', record: 'string' }, positional: 'values' },
+    advanced: { options: {} },
     trigrams: { operation: 'yi_get_trigrams', options: { name: 'string' } },
     classics: { operation: 'yi_get_classics', options: { section: 'string' } },
     'agent-config': { options: { client: 'string' } },
@@ -75,7 +86,12 @@ function parseCommand(command, argv) {
         else args.name = positional;
     }
     if (command === 'search') args.query = positional;
-    if (command === 'analyze') {
+    if (command === 'reading' && args.record !== undefined) {
+        if (positional !== undefined || args.lines !== undefined) throw new YiInputError('--record 与六爻不可混用');
+        args.recordId = args.record;
+        delete args.record;
+    }
+    if (command === 'analyze' || (command === 'reading' && args.recordId === undefined)) {
         if (positional !== undefined && args.lines !== undefined) throw new YiInputError('六爻不可重复指定');
         const input = args.lines ?? positional;
         if (input === undefined) throw new YiInputError('请提供六爻，例如 analyze 6,7,8,9,7,8');
@@ -94,10 +110,24 @@ function agentConfig(client = 'codex') {
 }
 
 function renderText(result) {
+    if (result.record && result.storage) {
+        const { record, storage } = result;
+        return [`事件：${record.question || '未填写'}`, `背景：${record.notes || '未填写'}`, `占记 ID：${record.id}`,
+            `时间：${new Date(record.timestamp).toISOString()}`, `${result.primary.fullName} → ${result.changed.fullName}`,
+            `六爻（初→上）：${result.values.join(',')}`,
+            storage.status === 'saved' ? `已保存：${storage.path}` : storage.status === 'failed' ? storage.message : '未保存到磁盘（需要时加 --save）',
+            `下一步：reading ${result.values.join(',')}；结合事件与该经文结果，由调用方 AI 解读。`].join('\n');
+    }
     if (result.primary) {
         const { primary, changed, guide } = result;
         const parts = [result.question ? `所问：${result.question}` : '', `${primary.id} ${primary.fullName} → ${changed.id} ${changed.fullName}`, `六爻（初→上）：${result.values.join(',')}`, `变爻：${result.changingPositions.join('、') || '无'}`, `${guide.rule.name}：${guide.rule.text}`];
         for (const reading of guide.readings) parts.push(`${reading.hexagram.fullName} ${reading.title || '卦辞'}${reading.main ? '（主）' : ''}：${reading.text}${reading.xiang ? `\n象曰：${reading.xiang}` : ''}`);
+        if (result.related) {
+            if (result.record?.notes) parts.push(`事件背景：${result.record.notes}`);
+            parts.push(`爻位：${result.positions.proper} 爻当位、${result.positions.improper} 爻失位，${result.positions.pairs} 组相应${result.positions.note ? `；${result.positions.note}` : ''}`, `白话：${primary.explanation || primary.overview || ''}`);
+            for (const [key, hexagram] of Object.entries(result.related)) parts.push(`${{ opposite: '错卦', inverse: '综卦', mutual: '互卦' }[key]}：${hexagram.fullName}；${hexagram.judgment || hexagram.explanation}`);
+            parts.push('以上为经文与确定性基础解析，AI 解读由调用方结合事件生成。');
+        }
         return parts.filter(Boolean).join('\n');
     }
     if (result.hexagram) {
@@ -123,6 +153,7 @@ export async function main(argv = process.argv.slice(2)) {
     const command = argv[0];
     const parsed = parseCommand(command, argv.slice(1));
     if (parsed.help) { process.stdout.write(`${HELP}\n`); return; }
+    if (command === 'advanced') { process.stdout.write(`${ADVANCED_HELP}\n`); return; }
     if (command === 'mcp') {
         if (parsed.text) throw new YiInputError('MCP stdout 只能输出协议，不支持 --text');
         const { runMcpServer } = await import('./mcp.mjs');
@@ -136,6 +167,7 @@ export async function main(argv = process.argv.slice(2)) {
     const api = await createYiApi();
     const result = await api.invoke(parsed.definition.operation, parsed.args);
     process.stdout.write(`${parsed.text ? renderText(result) : JSON.stringify(result, null, 2)}\n`);
+    if (result.storage?.status === 'failed') process.exitCode = 1;
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

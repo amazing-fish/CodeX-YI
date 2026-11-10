@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ function json(...args) {
 test('帮助、版本与 cwd 无关的 JSON 输出', () => {
     assert.match(run('--help').stdout, /初爻→上爻/);
     assert.match(run('help').stdout, /stdio MCP/);
-    assert.equal(run('--version').stdout.trim(), '2.2.0');
+    assert.equal(run('--version').stdout.trim(), '2.3.0');
     assert.equal(json('info').hexagrams, 64);
     assert.equal(json('info', '--json').lineOrder, 'bottom-to-top');
     assert.equal(json('list', '--limit', '2', '--offset', '62').items[1].id, 64);
@@ -98,6 +98,58 @@ test('npm link / 目录联接入口仍真正执行 CLI', () => {
         assert.equal(JSON.parse(result.stdout).hexagrams, 64);
     } finally {
         // 只清理本测试创建的临时目录；rm 不遍历目录联接的目标。
+        rmSync(directory, { recursive: true, force: true });
+    }
+});
+
+
+test('CLI 日常帮助收敛两步，起卦事件和 reading 全资料链路可运行', () => {
+    const help = run('--help').stdout;
+    assert.match(help, /cast --question/);
+    assert.match(help, /reading/);
+    assert.doesNotMatch(help, /search <关键词>/);
+    assert.match(run('advanced').stdout, /search <关键词>/);
+    const cast = json('cast', '--question', '事件', '--notes', '背景');
+    assert.equal(cast.record.question, '事件');
+    assert.equal(cast.record.notes, '背景');
+    assert.equal(cast.storage.status, 'not_saved');
+    const reading = json('reading', cast.values.join(','));
+    assert.equal(reading.primary.id, cast.primary.id);
+    assert.equal(Object.keys(reading.related).length, 3);
+    const rendered = run('reading', '9,9,9,9,9,9', '--text');
+    for (const word of ['用九', '错卦', '综卦', '互卦', '白话', '爻位', 'AI 解读由调用方']) assert.ok(rendered.stdout.includes(word), word);
+    for (const args of [['reading'], ['reading', '--record', '../other'], ['reading', '7,7,7,7,7,7', '--record', 'id'], ['cast', '--save', 'true']]) assert.equal(run(...args).status, 2);
+});
+
+
+test('CLI 跨进程保存/重读呈现背景，保存失败有原卦输出且退出1', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'yi-cli-records-'));
+    const env = { ...process.env, HOME: directory, USERPROFILE: directory };
+    const isolated = args => spawnSync(process.execPath, [cli, ...args], { env, encoding: 'utf8', timeout: 10000, windowsHide: true });
+    try {
+        const home = spawnSync(process.execPath, ['--input-type=module', '--eval', "import { homedir } from 'node:os'; process.stdout.write(homedir())"], { env, encoding: 'utf8', windowsHide: true });
+        assert.equal(home.stdout, directory, '测试必须使用自己的临时用户目录，不接触真实占记');
+        const saved = isolated(['cast', '--question', '学习安排', '--notes', '预算已经耗尽', '--save']);
+        assert.equal(saved.status, 0, saved.stderr);
+        const result = JSON.parse(saved.stdout);
+        assert.equal(result.storage.status, 'saved');
+        const reread = isolated(['reading', '--record', result.record.id, '--text']);
+        assert.equal(reread.status, 0, reread.stderr);
+        assert.ok(reread.stdout.includes('预算已经耗尽'));
+        assert.doesNotMatch(reread.stdout, /爻位：\{/);
+        assert.ok(reread.stdout.includes(result.values.join(',')));
+        const blockedHome = join(directory, 'blocked-home');
+        mkdirSync(blockedHome);
+        writeFileSync(join(blockedHome, '.yi'), 'not a directory');
+        const failed = spawnSync(process.execPath, [cli, 'cast', '--question', '保留这次', '--save'], { env: { ...env, HOME: blockedHome, USERPROFILE: blockedHome }, encoding: 'utf8', timeout: 10000, windowsHide: true });
+        assert.equal(failed.status, 1);
+        const retained = JSON.parse(failed.stdout);
+        assert.equal(retained.storage.status, 'failed');
+        assert.equal(retained.record.question, '保留这次');
+        assert.equal(retained.values.length, 6);
+    } finally {
+        assert.equal(dirname(directory), tmpdir());
+        assert.ok(directory.includes('yi-cli-records-'));
         rmSync(directory, { recursive: true, force: true });
     }
 });

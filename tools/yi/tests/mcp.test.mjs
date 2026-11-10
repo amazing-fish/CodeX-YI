@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createYiApi, OPERATIONS, VERSION, YiInputError } from '../api.mjs';
+import { createYiApi, OPERATIONS, MCP_OPERATIONS, VERSION, YiInputError } from '../api.mjs';
 import { runMcpServer, MAX_MESSAGE_BYTES, SUPPORTED_PROTOCOL_VERSIONS } from '../mcp.mjs';
 
 const mcpPath = fileURLToPath(new URL('../mcp.mjs', import.meta.url));
@@ -83,7 +83,7 @@ test('初始化协商与能力声明完整，完成 initialized 后才开放工�
     assert.deepEqual(messages[2].result.capabilities, { tools: { listChanged: false } });
     assert.deepEqual(messages[2].result.serverInfo, { name: 'yi', version: VERSION });
     assert.equal(messages[3].error.code, -32002);
-    assert.equal(messages[4].result.tools.length, 8);
+    assert.equal(messages[4].result.tools.length, 2);
     assert.equal(messages[5].error.code, -32600);
     assert.equal(stderr, '');
 });
@@ -113,18 +113,19 @@ test('初始化参数错误可重试，提前或错误的 initialized 通知不�
     ]);
     for (const message of messages.slice(0, 4)) assert.equal(message.error.code, -32602);
     assert.equal(messages[5].error.code, -32002);
-    assert.equal(messages[6].result.tools.length, 8);
+    assert.equal(messages[6].result.tools.length, 2);
 });
 
-test('tools/list 使用共享 API schema，且不宣称命令、文件或网络工具', async () => {
+test('tools/list 只发现两个工作流工具，声明保存副作用且不提供任意文件或网络工具', async () => {
     const { messages } = await transcript([...ready(), request(1, 'tools/list'), request(2, 'tools/list', { cursor: 'unknown' })]);
-    assert.deepEqual(messages[1].result.tools, OPERATIONS);
+    assert.deepEqual(messages[1].result.tools, MCP_OPERATIONS);
     assert.equal(messages[2].error.code, -32602);
     assert.equal(messages[1].result.tools.find(tool => tool.name === 'yi_cast').annotations.idempotentHint, false);
-    assert.ok(messages[1].result.tools.every(tool => tool.annotations.readOnlyHint && !tool.annotations.openWorldHint));
+    assert.ok(messages[1].result.tools.every(tool => !tool.annotations.openWorldHint));
+    assert.equal(messages[1].result.tools[0].annotations.readOnlyHint, false);
+    assert.equal(messages[1].result.tools[1].annotations.readOnlyHint, true);
     assert.deepEqual(messages[1].result.tools.map(tool => tool.name), [
-        'yi_info', 'yi_list_hexagrams', 'yi_get_hexagram', 'yi_search_hexagrams',
-        'yi_analyze_lines', 'yi_cast', 'yi_get_trigrams', 'yi_get_classics'
+        'yi_cast', 'yi_reading'
     ]);
 });
 
@@ -296,18 +297,18 @@ test('客户端提前关闭输出管道按断连处理，不产生未捕获 EPIP
     await idleRunning;
 });
 
-test('真实数据的八个工具通过子进程调用，任意 cwd、正常 EOF 退出且 stdout 纯协议', async () => {
+test('真实数据的新旧操作通过子进程调用，任意 cwd、正常 EOF 退出且 stdout 纯协议', async () => {
     const argumentsByName = {
         yi_info: {}, yi_list_hexagrams: { offset: 0, limit: 2 }, yi_get_hexagram: { id: 1 },
         yi_search_hexagrams: { query: '潜龙' }, yi_analyze_lines: { values: [7, 7, 7, 7, 7, 7], question: '文化学习' },
-        yi_cast: {}, yi_get_trigrams: { name: '乾' }, yi_get_classics: { section: 'shuogua' }
+        yi_cast: {}, yi_get_trigrams: { name: '乾' }, yi_get_classics: { section: 'shuogua' }, yi_reading: { values: [7, 7, 7, 7, 7, 7] }
     };
     const calls = OPERATIONS.map(({ name }, index) => request(index, 'tools/call', { name, arguments: argumentsByName[name] }));
     const result = await subprocess(mcpPath, { raw: encode([...ready(), ...calls]) });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(result.stderr, '');
     const messages = parseOutput(result.stdout);
-    assert.equal(messages.length, 9);
+    assert.equal(messages.length, 10);
     for (const message of messages.slice(1)) {
         assert.equal(message.result.isError, false);
         assert.deepEqual(JSON.parse(message.result.content[0].text), message.result.structuredContent);
@@ -351,7 +352,7 @@ test('通过真实目录联接启动 MCP 时仍完成握手与工具调用', asy
         const messages = parseOutput(result.stdout);
         assert.equal(messages.length, 3, '目录联接入口不得静默退出');
         assert.equal(messages[0].result.protocolVersion, SUPPORTED_PROTOCOL_VERSIONS[0]);
-        assert.equal(messages[1].result.tools.length, 8);
+        assert.equal(messages[1].result.tools.length, 2);
         assert.equal(messages[2].result.structuredContent.hexagrams, 64);
     } finally {
         // 只删除联接本身，不遍历或删除其目标目录。
@@ -366,7 +367,7 @@ test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象
     const fixtureApi = join(directory, 'api.mjs');
     try {
         await writeFile(fixtureMcp, await readFile(mcpPath));
-        await writeFile(fixtureApi, `export const OPERATIONS = [];\nexport const VERSION = 'test';\nexport class YiInputError extends Error {}\nexport async function createYiApi() { throw new Error('测试初始化失败'); }\n`);
+        await writeFile(fixtureApi, `export const OPERATIONS = [];\nexport const MCP_OPERATIONS = [];\nexport const VERSION = 'test';\nexport class YiInputError extends Error {}\nexport async function createYiApi() { throw new Error('测试初始化失败'); }\n`);
         const result = await subprocess(fixtureMcp);
         assert.equal(result.code, 1);
         assert.equal(result.stdout, '');
@@ -376,4 +377,22 @@ test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象
         await unlink(fixtureApi).catch(() => {});
         await rmdir(directory);
     }
+});
+
+
+test('真实 API 的两步工作流保留事件并返回可供 AI 解读的完整资料', async () => {
+    const api = await createYiApi();
+    const first = await transcript([...ready(), request(1, 'tools/list'), request(2, 'tools/call', { name: 'yi_cast', arguments: { question: '学习规划', notes: '只有两个小时' } })], { api });
+    assert.deepEqual(first.messages[1].result.tools.map(tool => tool.name), ['yi_cast', 'yi_reading']);
+    const cast = first.messages[2].result.structuredContent;
+    assert.equal(cast.record.notes, '只有两个小时');
+    assert.equal(cast.storage.status, 'not_saved');
+    const second = await transcript([...ready(), request(1, 'tools/call', { name: cast.next.tool, arguments: cast.next.arguments })], { api });
+    const reading = second.messages[1].result.structuredContent;
+    assert.equal(reading.primary.id, cast.primary.id);
+    assert.deepEqual(reading.values, cast.values);
+    assert.equal(Object.keys(reading.related).length, 3);
+    assert.ok(reading.guide.readings.length);
+    assert.equal(reading.interpretation.generated, false);
+    assert.equal(first.stderr + second.stderr, '');
 });

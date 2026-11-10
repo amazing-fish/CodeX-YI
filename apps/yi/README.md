@@ -24,7 +24,7 @@
 
 ## CLI 与本机 Agent
 
-仓库新增零依赖 Node CLI 与 stdio MCP，共享本页同一易理核心和数据校验。支持离线查卦、搜索、六爻解析、随机三钱成卦、八卦和经传附录；不接触浏览器占记。入口与接入配置见 [CLI / MCP 文档](../../tools/yi/README.md)。Node 22+ 可直接运行 `node tools/yi/cli.mjs --help`（仓库根目录）。
+仓库新增零依赖 Node CLI 与 stdio MCP，共享本页同一易理核心和数据校验。日常流程收敛为“起卦＋事件占记”与“经文＋基础解析（含错综互）”两步，再由调用方 AI 解读；默认不落盘，显式保存才写本机固定目录，不接触浏览器占记。高级查询保留。入口与接入配置见 [CLI / MCP 文档](../../tools/yi/README.md)。Node 22+ 可直接运行 `node tools/yi/cli.mjs --help`（仓库根目录）。
 
 ## 开发指南
 1. 在 `apps/yi/` 目录下启动任意静态服务器，例如 `python -m http.server 8000 --bind 127.0.0.1`。

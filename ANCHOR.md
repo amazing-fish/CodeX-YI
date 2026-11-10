@@ -16,7 +16,7 @@
   - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
   - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
   - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
-- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（八工具共享参数校验与能力）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，数据只读且不访问浏览器占记。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
+- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，AI 解读由调用方生成。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
 - 支撑模块：
   - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
   - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
@@ -74,6 +74,7 @@
 
 ## 最近14个版本变更日志
 
+- v2.3.0（feature）：CLI/MCP 收敛为起卦记事、经文解析两步；可显式本机保存并按 ID 重读，完整返回错综互，AI 解读由调用方基于事件与资料生成
 - v2.2.0（feature）：新增离线 CLI 与 stdio MCP，复用易理核心和数据服务；提供八项只读工具、严格参数校验、本机配置生成及全组合/协议测试，浏览器接口与占记边界保持不变
 - v2.1.2（bugfix）：主题切换去掉强制同步样式重算（地址栏色改取常量），切换两帧内暂停全站颜色过渡；4 倍降速下长任务总时长约减 56%，并以契约固定地址栏色与 `--paper` 一致
 - v2.1.1（bugfix/merge）：合并 main 的 v1.2.0–v1.7.5 修复并移植到 v2 结构：数据失败关闭校验与原子提交、占记 v1 编解码与 canonical 水合、持久化文本只经 textContent、存储迁移容错、重置/载入占记取消进行中的投掷；契约测试改写为 v2 并纳入统一验证入口
@@ -87,7 +88,6 @@
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
-- v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -103,6 +103,19 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.3.0
+
+- 变更版本：v2.3.0（feature），继续 PR #29 / Refs #28。
+- 目标：将零散工具收敛成“起卦＋事件记录”和“经文＋基础解析（错综互）”，再由调用方 AI 解读。
+- 变更文件与摘要：
+  - `tools/yi/api.mjs`：yi_cast 返回 v1 事件占记、原始六爻和下一步；显式 save 写固定用户目录，失败保留原卦；yi_reading 按六爻/UUID 取经文、白话、爻位及完整本卦错综互，按 ID 时同时返回事件。
+  - `tools/yi/cli.mjs` / `mcp.mjs`：日常帮助与 MCP 发现收敛两个入口；旧 CLI 和 MCP 显式名称保留，cast 返回结构改为两阶段。文本输出呈现事件背景与中文爻位，不伪造 AI 解读。
+  - `tools/yi/tests/*.test.mjs`：覆盖默认无写入、显式保存、跨实例重读、并发、损坏/非法 ID、失败保留原卦、完整自反关系及协议发现；原 4096 组合和浏览器契约保留。
+  - `tools/yi/README.md` / `apps/yi/README.md`、版本元数据和归档：记录新流程、迁移、命令与本机明文存储边界。
+- 验证：Windows / Node 24.22.2，`node --test tools/yi/tests/*.test.mjs` 83/83（API 54、CLI 8、MCP 21）；`node apps/yi/tests/validate-project.mjs` 全部通过（原核心 13 项＋6 份契约）；`git diff --check` 通过。沙箱目录联接 EPERM 后，在获准正常终端原命令重跑通过，没有跳过测试。独立审查的文本重读背景缺失、爻位 JSON 展示均修复并加回归。未单测 Node 22、客户端当前会话热重载或浏览器完整手工流程。
+- 默认与风险：无网络或模型调用；默认不保存事件。save:true 会将问题/背景/六爻明文写入 `.yi/records/<UUID>.json`，Windows ACL 由用户目录继承，不声称加密或跨用户隔离。不读浏览器占记，不自动同步。保存失败不可重起；客户端应检查 storage.status。MCP 宿主可以看到传入事件，即使本工具离线也不代表宿主离线。
+- 兼容性：旧 cast 返回的完整经文改由 reading 返回，版本提升至 2.3.0；旧低层查询直接调用保留但不在工具发现中展示。当前 PR 未发布、不合并、不部署。
 
 ## 审计记录：v2.2.0
 

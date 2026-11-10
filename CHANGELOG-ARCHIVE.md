@@ -14,3 +14,5 @@
 - v1.0.0（feature）：新增协作文档 `AGENTS.md` 与锚点文档 `ANCHOR.md`；确立角色、流程、提示词与审计规范；落实 Windows + PowerShell 约定
 
 - v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
+
+- v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
