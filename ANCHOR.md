@@ -16,7 +16,7 @@
   - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
   - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
   - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
-- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，两者附原生 PNG 卦画与 rendering 资料（image:none 可关图）；`tools/yi/render.mjs` 零依赖内存绘图，不写图片且不嵌入事件，AI 解读由调用方生成。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
+- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，两者附原生 PNG 卦画与 rendering 资料（image:none 可关图）；`tools/yi/render.mjs` 只组织本卦，`web-render.mjs` 复用网页共享组件和原 CSS，由本机 Chromium 生成 PNG；临时隔离配置、内存图片、不嵌入事件，AI 解读由调用方生成。Node 22+、零 npm 依赖，PNG 另需本机 Chromium；接入文档 `tools/yi/README.md`。
 - 支撑模块：
   - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
   - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
@@ -74,6 +74,8 @@
 
 ## 最近14个版本变更日志
 
+- v2.4.1（bugfix）：MCP 改用网页同一卦画/爻位组件和 Chromium 真实渲染，只画本卦及变爻/居中/相应；文本保留之卦与错综互
+
 - v2.4.0（feature）：MCP 两工具默认附原生 PNG 卦画；共享中文 rendering 数据、纯文本选项、动爻/变后标记与图片失败保留原卦，零第三方依赖且不写图片
 
 - v2.3.0（feature）：CLI/MCP 收敛为起卦记事、经文解析两步；可显式本机保存并按 ID 重读，完整返回错综互，AI 解读由调用方基于事件与资料生成
@@ -88,7 +90,6 @@
 - v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
 - v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
-- v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -104,6 +105,18 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.4.1
+
+- 变更版本：v2.4.1（bugfix），基于 PR #30 已合入的 main 54301ebb，延续 #28。
+- 用户纠正：旧图片另写点阵且绘制过多卦；本次只画本卦，保留变爻、当位/失位、居中、相应等原网页标记。经文、之卦、错综互文本不删减。
+- 变更文件与摘要：
+  - `apps/yi/js/core/hexagram-view.js`：从 app.js 移出原 figure / positionTags / positionSummary，共享 CommonJS/浏览器实现；网页直接委托，index.html 加载；gua.css 只补单本卦排版，静态契约验证相同 DOM。
+  - `tools/yi/render.mjs` / `web-render.mjs`：单本卦 metadata v2；原 CSS 加共享组件，在已安装 Chromium 独立临时配置里截图；不传事件、不读用户浏览器、不落图片；CSP/CDP 禁外链，结束清理。
+  - `mcp.mjs` 异步图片与失败降级；api/版本/README/测试同步。image:none 保持 Node-only、不创建浏览器配置。
+- 当前验证：93 项接口测试通过（含 4096 组合、真实 PNG/双协议/临时目录清理）；共享网页契约通过，git diff --check 通过。实际网页1440/390px对照7/7通过，六爻 computed color、变爻伪元素和相应标签与图片一致；Codex CLI新会话实际调用并从图片正确识别单本卦及上六×。独立审查发现的 CDP 握手无超时已加超时/关闭 socket及回归；在独立 clean worktree（同一暂存差异）完整运行 validate-project 全通过：原核心13项、6份契约及93项接口测试。原工作区未跟踪的历史 reports/qa/yi-image-report-qa.js EOF空行仍会干扰统一校验，保留该旧草稿未改动。
+- 兼容与取舍：图片由两/五栏改为一栏，rendering.version=2，648×520；需要本机 Chromium 与中文字体，正常图片调用新增约秒级启动成本。默认不保存占记，但会创建/清理浏览器临时配置，异常退出可能残留。失败保留原卦，不自动重起。
+- 本图是原组件与原样式的真实浏览器渲染，独立单卦布局，不冒称整页截图。未自动合并或部署；Node 22、其他系统字体、Claude UI、旧会话热重载不在当前已验证范围。
 
 ## 审计记录：v2.4.0
 

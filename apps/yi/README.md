@@ -24,7 +24,7 @@
 
 ## CLI 与本机 Agent
 
-仓库新增零依赖 Node CLI 与 stdio MCP，共享本页同一易理核心和数据校验。日常流程收敛为“起卦＋事件占记”与“经文＋基础解析（含错综互）”两步，再由调用方 AI 解读；默认不落盘，显式保存才写本机固定目录，不接触浏览器占记。高级查询保留。入口与接入配置见 [CLI / MCP 文档](../../tools/yi/README.md)。Node 22+ 可直接运行 `node tools/yi/cli.mjs --help`（仓库根目录）。
+仓库新增零 npm 依赖 Node CLI 与 stdio MCP，共享本页同一易理核心和数据校验。日常流程收敛为“起卦＋事件占记”与“经文＋基础解析（含错综互）”两步，再由调用方 AI 解读；默认不落盘，显式保存才写本机固定目录，不接触浏览器占记。高级查询保留。入口与接入配置见 [CLI / MCP 文档](../../tools/yi/README.md)。Node 22+ 可直接运行 `node tools/yi/cli.mjs --help`（仓库根目录）。
 
 ## 开发指南
 1. 在 `apps/yi/` 目录下启动任意静态服务器，例如 `python -m http.server 8000 --bind 127.0.0.1`。
@@ -71,4 +71,4 @@ git diff --check
 ## 范围说明
 当前未启用 PWA 与 Service Worker。白话释义为原项目自带，个别条目与原文有出入，阅读时以经文为准。内容仅供学习与自省。
 
-MCP 两个日常工具默认附原生 PNG 卦画与中文渲染数据：起卦给本/之卦，reading 给本/之/错/综/互；image:none 可关闭图片。图片不包含事件文本，不依赖浏览器或外部字体，详见 [本机接口说明](../../tools/yi/README.md#mcp-卦画与渲染信息v240)。
+MCP 两个日常工具默认附原网页共享组件真实渲染的单本卦 PNG，保留变爻、当位、居中、相应等标记；之卦与错综互仍在文本中。PNG 需要本机 Chrome/Edge/Chromium 与中文字体，独立临时配置不接触用户浏览器；image:none 不启动浏览器。详见 [本机接口说明](../../tools/yi/README.md#mcp-卦画与渲染信息v241)。

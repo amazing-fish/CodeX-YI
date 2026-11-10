@@ -5,7 +5,7 @@
 
 const APP_CONFIG = Object.freeze({
     name: '易之',
-    version: '2.4.0',
+    version: '2.4.1',
     debug: false,
     storage: Object.freeze({
         backend: 'localStorage',
@@ -302,33 +302,8 @@ const UI = {
      * @param {number} options.active 正在投掷的位置（1-6）
      * @param {string} options.label 无障碍名称
      */
-    figure(bits, options = {}) {
-        const { size = 'md', changing = [], moved = [], active = 0, label = '' } = options;
-        let html = '';
-
-        for (let position = bits.length; position >= 1; position -= 1) {
-            const bit = bits[position - 1];
-            const classes = ['yao'];
-
-            if (bit === null || bit === undefined) {
-                classes.push('is-empty');
-                if (position === active) classes.push('is-active');
-            } else {
-                classes.push(bit === 1 ? 'is-yang' : 'is-yin');
-                if (changing.includes(position)) classes.push('is-changing');
-                if (moved.includes(position)) classes.push('is-moved');
-            }
-
-            html += `<span class="${classes.join(' ')}" data-position="${position}"></span>`;
-        }
-
-        const aria = label ? ` role="img" aria-label="${Utils.escapeHtml(label)}"` : ' aria-hidden="true"';
-        return `<span class="gua gua-${size}"${aria}>${html}</span>`;
-    },
-
-    figureFromBinary(binary, options = {}) {
-        return UI.figure(YiCore.binaryToBits(binary), options);
-    },
+    figure: YiView.figure,
+    figureFromBinary: YiView.figureFromBinary,
 
     /**
      * 太极图：外圆两半、S 形分界与鱼眼均为独立图元，便于分别施加动效
@@ -348,27 +323,9 @@ const UI = {
         return `<div class="loading-state" role="status">${UI.taiji('taiji-spin')}<span>${Utils.escapeHtml(text)}</span></div>`;
     },
 
-    // 爻位标记：当位 / 失位、居中、有应 / 无应
-    positionTags(position) {
-        const partner = YiCore.POSITION_NAMES[position.partner - 1];
-        const tags = [
-            position.proper
-                ? '<span class="pos-tag" title="阳爻居奇位或阴爻居偶位">当位</span>'
-                : '<span class="pos-tag is-off" title="阳爻居偶位或阴爻居奇位">失位</span>'
-        ];
-        if (position.central) {
-            tags.push('<span class="pos-tag" title="二、五分居下卦、上卦之中">居中</span>');
-        }
-        tags.push(position.corresponds
-            ? `<span class="pos-tag" title="与${partner}爻一阴一阳，相应">应${partner}</span>`
-            : `<span class="pos-tag is-off" title="与${partner}爻同性，不相应">无应</span>`);
-        return `<span class="pos-tags">${tags.join('')}</span>`;
-    },
-
-    positionSummary(bits) {
-        const summary = YiCore.positionSummary(bits);
-        return `<p class="pos-summary">当位 ${summary.proper} · 失位 ${summary.improper} · 相应 ${summary.pairs} 组${summary.note ? `<span class="pos-note">${Utils.escapeHtml(summary.note)}</span>` : ''}</p>`;
-    },
+    // 网页与本机截图使用同一份爻位标记。
+    positionTags: YiView.positionTags,
+    positionSummary: YiView.positionSummary,
 
     /**
      * 卦辞、彖、大象；无经传原文时返回空串

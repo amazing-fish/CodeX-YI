@@ -59,7 +59,7 @@ function subprocess(path = mcpPath, { raw = '', cwd = tmpdir() } = {}) {
         const child = spawn(process.execPath, [path], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
         const stdout = [];
         const stderr = [];
-        const timer = setTimeout(() => { child.kill(); reject(new Error('MCP 子进程未在 15 秒内退出')); }, 15000);
+        const timer = setTimeout(() => { child.kill(); reject(new Error('MCP 子进程未在 60 秒内退出')); }, 60000);
         child.on('error', failure => { clearTimeout(timer); reject(failure); });
         child.stdout.on('data', chunk => stdout.push(chunk));
         child.stderr.on('data', chunk => stderr.push(chunk));
@@ -367,7 +367,7 @@ test('启动失败仅写 stderr 并非零退出，不输出初始化成功假象
     const fixtureApi = join(directory, 'api.mjs');
     try {
         await writeFile(fixtureMcp, await readFile(mcpPath));
-        await writeFile(join(directory, 'render.mjs'), await readFile(new URL('../render.mjs', import.meta.url)));
+        await writeFile(join(directory, 'render.mjs'), 'export function renderPng() { throw new Error("fixture"); }');
         await writeFile(fixtureApi, `export const OPERATIONS = [];\nexport const MCP_OPERATIONS = [];\nexport const VERSION = 'test';\nexport class YiInputError extends Error {}\nexport async function createYiApi() { throw new Error('测试初始化失败'); }\n`);
         const result = await subprocess(fixtureMcp);
         assert.equal(result.code, 1);
@@ -432,7 +432,7 @@ test('关闭图片保留渲染数据；非法图片选项与原始参数均失�
         request(7, 'tools/call', { name: 'yi_reading', arguments: { values, image: 'png' } })], { api });
     assert.equal(messages[1].result.content.length, 1);
     assert.equal(messages[1].result.structuredContent.rendering.image.status, 'omitted');
-    assert.equal(messages[1].result.structuredContent.rendering.figures.length, 5);
+    assert.equal(messages[1].result.structuredContent.rendering.figures.length, 1);
     for (const message of messages.slice(2, 7)) {
         assert.equal(message.result.isError, true);
         assert.equal(message.result.content.length, 1);
@@ -456,4 +456,21 @@ test('绘图失败保留原卦与占记，不触发再次起卦或伪装成工�
     assert.equal(result.structuredContent.rendering.image.status, 'failed');
     assert.match(result.structuredContent.rendering.image.message, /不要重新起卦/);
     assert.equal(result.structuredContent.storage.status, 'not_saved');
+});
+
+test('image:none 完全跳过图片执行，浏览器缺失只降级图片而保留原卦', async () => {
+    const api = await createYiApi();
+    let renders = 0;
+    const { messages } = await transcript([...ready(),
+        request(1, 'tools/call', { name: 'yi_reading', arguments: { values: [8, 8, 7, 7, 7, 6], image: 'none' } }),
+        request(2, 'tools/call', { name: 'yi_reading', arguments: { values: [8, 8, 7, 7, 7, 6] } })], {
+        api, async renderImage() { renders += 1; throw Object.assign(new Error('未安装浏览器'), { code: 'BROWSER_NOT_FOUND' }); }
+    });
+    assert.equal(renders, 1);
+    assert.equal(messages[1].result.structuredContent.rendering.image.status, 'omitted');
+    assert.equal(messages[2].result.structuredContent.rendering.image.code, 'BROWSER_NOT_FOUND');
+    assert.equal(messages[2].result.isError, false);
+    assert.deepEqual(messages[1].result.structuredContent.values, messages[2].result.structuredContent.values);
+    assert.equal(messages[2].result.structuredContent.primary.id, 31);
+    assert.ok(messages[2].result.structuredContent.related.mutual);
 });
