@@ -20,3 +20,5 @@
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
 
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
+
+- v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
