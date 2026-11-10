@@ -5,7 +5,7 @@
 
 const APP_CONFIG = Object.freeze({
     name: '易之',
-    version: '2.3.0',
+    version: '2.4.0',
     debug: false,
     storage: Object.freeze({
         backend: 'localStorage',

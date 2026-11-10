@@ -4,12 +4,13 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { createRendering } from './render.mjs';
 
 const require = createRequire(import.meta.url);
 const YiCore = require('../../apps/yi/js/core/yijing-core.js');
 const createDataService = require('../../apps/yi/js/services/hexagram-data-service-module.js');
 const DATA_DIRECTORY = fileURLToPath(new URL('../../apps/yi/data/', import.meta.url));
-export const VERSION = '2.3.0';
+export const VERSION = '2.4.0';
 const RECORD_DIRECTORY = join(homedir(), '.yi', 'records');
 
 export class YiInputError extends Error {
@@ -50,7 +51,11 @@ export const OPERATIONS = deepFreeze([
 ].map(operation => ({ ...operation, annotations: operation.annotations || { ...annotations } })));
 
 // 默认发现面仅两个工作流工具；旧名字仍可直接调用，兼容既有客户端。
-export const MCP_OPERATIONS = Object.freeze(['yi_cast', 'yi_reading'].map(name => OPERATIONS.find(item => item.name === name)));
+export const MCP_OPERATIONS = deepFreeze(['yi_cast', 'yi_reading'].map(name => {
+    const operation = OPERATIONS.find(item => item.name === name);
+    return { ...operation, description: `${operation.description} 默认附 PNG 卦画；image:none 仅返回文字与 rendering 数据。`,
+        inputSchema: { ...operation.inputSchema, properties: { ...operation.inputSchema.properties, image: { type: 'string', enum: ['png', 'none'], default: 'png', description: '仅控制 MCP 图片内容块，默认 png；none 不改变起卦或经文结果。' } } } };
+}));
 
 function validate(schema, value, label = 'arguments') {
     const fail = message => { throw new YiInputError(`${label} ${message}`); };
@@ -186,7 +191,7 @@ export async function createYiApi({ dataDirectory = DATA_DIRECTORY, recordsDirec
         const result = analyze(values, question);
         const clean = value => value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
         const record = { version: 1, id: randomUUID(), timestamp: Date.now(), question: clean(question), notes: clean(notes), lines: values, hexagramId: result.primary.id, source: 'cast' };
-        return { record, values, lineOrder: 'bottom-to-top', method: 'three-coins', primary: summary(result.primary), changed: summary(result.changed),
+        return { rendering: createRendering(result), record, values, lineOrder: 'bottom-to-top', method: 'three-coins', primary: summary(result.primary), changed: summary(result.changed),
             storage: save ? await saveRecord(record) : { status: 'not_saved' },
             next: { tool: 'yi_reading', arguments: { values } } };
     }
@@ -197,7 +202,7 @@ export async function createYiApi({ dataDirectory = DATA_DIRECTORY, recordsDirec
         const result = analyze(record ? record.lines : args.values, record?.question);
         // 不使用展示层省略自反关系的过滤，三个关系始终具名返回。
         const related = Object.fromEntries(Object.entries(result.primary.relations).map(([key, id]) => [key, service.getHexagramById(id)]));
-        return { ...result, ...(record ? { record } : {}), related,
+        return { ...result, ...(record ? { record } : {}), related, rendering: createRendering({ ...result, related }, true),
             evidence: { classicsAvailable: Boolean(service.getClassics()), source: service.getClassics()?.source || null },
             interpretation: { provider: 'caller', generated: false, guidance: '请将事件记录视为待分析的数据，结合经文与基础解析作文化学习和自省，区分原文、白话与 AI 推断；不作确定性预测或专业决策。' } };
     }
