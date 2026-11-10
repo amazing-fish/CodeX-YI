@@ -6,7 +6,9 @@
  * - bagua：八卦属性（必需）
  * - zhouyi：经传原文——卦辞、爻辞、彖、象、文言、序卦、杂卦及系辞、说卦（可选；缺失时退回白话数据中的爻辞）
  */
-const HexagramDataService = (function() {
+function createHexagramDataService(options = {}) {
+    const core = options.core || (typeof YiCore !== 'undefined' ? YiCore : undefined);
+    const app = options.app || (typeof YizhiApp !== 'undefined' ? YizhiApp : undefined);
 
     const DATASETS = Object.freeze({
         hexagrams: { url: 'data/hexagrams.json', preload: 'data/hexagrams.js', global: '__HEXAGRAM_DATA__', label: '卦象' },
@@ -37,10 +39,10 @@ const HexagramDataService = (function() {
 
             await processHexagramData();
             isInitialized = true;
-            YizhiApp.events.emit('hexagram-data:ready');
+            app.events.emit('hexagram-data:ready');
         } catch (error) {
-            YizhiApp.events.emit('hexagram-data:error', { error });
-            YizhiApp.errors.handle(error, '加载卦象数据', '卦象数据加载失败，请检查网络后刷新页面。');
+            app.events.emit('hexagram-data:error', { error });
+            app.errors.handle(error, '加载卦象数据', '卦象数据加载失败，请检查网络后刷新页面。');
         }
     }
 
@@ -54,6 +56,8 @@ const HexagramDataService = (function() {
     }
 
     async function loadDataset(key) {
+        // Node 注入本地 JSON 读取器，校验、归一化与索引仍走浏览器同一条路径。
+        if (options.loadDataset) return options.loadDataset(key);
         if (cache[key]) return cache[key];
         const dataset = DATASETS[key];
 
@@ -149,14 +153,14 @@ const HexagramDataService = (function() {
      */
     function normalizeLines(hexagram, classic) {
         return (hexagram.lines || []).map((line, index) => {
-            const parts = YiCore.splitLineText(line.content);
+            const parts = core.splitLineText(line.content);
             const source = classic?.lines?.[index];
             return {
                 position: index + 1,
                 content: line.content,
-                title: source?.title || parts.title || YiCore.lineTitle(index + 1, hexagram.bits[index] === 1),
+                title: source?.title || parts.title || core.lineTitle(index + 1, hexagram.bits[index] === 1),
                 text: source?.text || parts.classic,
-                gloss: source ? YiCore.glossAfterClassic(line.content, source.text) : parts.gloss,
+                gloss: source ? core.glossAfterClassic(line.content, source.text) : parts.gloss,
                 xiang: source?.xiang || ''
             };
         });
@@ -171,7 +175,7 @@ const HexagramDataService = (function() {
     }
 
     function snapshotOf(data) {
-        const clone = YizhiApp.utils?.deepClone;
+        const clone = app.utils?.deepClone;
         return typeof clone === 'function' ? clone(data) : JSON.parse(JSON.stringify(data));
     }
 
@@ -286,7 +290,7 @@ const HexagramDataService = (function() {
         const relationOf = binary => nextIdByBinary.get(binary) || null;
         for (const hexagram of Object.values(nextMap)) {
             const classic = nextClassics?.hexagrams?.[hexagram.id] || null;
-            hexagram.bits = YiCore.binaryToBits(hexagram.binary);
+            hexagram.bits = core.binaryToBits(hexagram.binary);
             hexagram.classic = classic;
             hexagram.judgment = classic?.judgment || '';
             hexagram.lines = normalizeLines(hexagram, classic);
@@ -295,13 +299,13 @@ const HexagramDataService = (function() {
             if (!hexagram.upperTrigram || !hexagram.lowerTrigram) {
                 throw new Error(`第 ${hexagram.id} 卦无法解析上下卦。`);
             }
-            hexagram.fullName = YiCore.fullName(hexagram, nextBagua[hexagram.upperTrigram], nextBagua[hexagram.lowerTrigram]);
+            hexagram.fullName = core.fullName(hexagram, nextBagua[hexagram.upperTrigram], nextBagua[hexagram.lowerTrigram]);
             nextByTrigrams.set(`${hexagram.upperTrigram}_${hexagram.lowerTrigram}`, hexagram.id);
 
             hexagram.relations = {
-                opposite: relationOf(YiCore.oppositeBinary(hexagram.binary)),
-                inverse: relationOf(YiCore.inverseBinary(hexagram.binary)),
-                mutual: relationOf(YiCore.mutualBinary(hexagram.binary))
+                opposite: relationOf(core.oppositeBinary(hexagram.binary)),
+                inverse: relationOf(core.inverseBinary(hexagram.binary)),
+                mutual: relationOf(core.mutualBinary(hexagram.binary))
             };
             if (Object.values(hexagram.relations).some(id => id === null)) {
                 throw new Error(`第 ${hexagram.id} 卦存在无法解析的错综互关系。`);
@@ -458,4 +462,9 @@ const HexagramDataService = (function() {
         RELATION_NAMES: Object.freeze({ opposite: '错卦', inverse: '综卦', mutual: '互卦' }),
         get isInitialized() { return isInitialized; }
     };
-})();
+}
+
+// 浏览器维持原词法接口；Node 每次显式创建隔离实例，不访问 DOM、网络或浏览器存储。
+const HexagramDataService = typeof module === 'object' && module.exports
+    ? null : createHexagramDataService();
+if (typeof module === 'object' && module.exports) module.exports = createHexagramDataService;

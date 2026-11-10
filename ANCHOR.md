@@ -16,6 +16,7 @@
   - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
   - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
   - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
+- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，AI 解读由调用方生成。Node 22+、零第三方运行依赖，接入文档 `tools/yi/README.md`。
 - 支撑模块：
   - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
   - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
@@ -23,7 +24,7 @@
   - `notification`（toast，可带“撤销”等操作）、`theme`（深浅色）、`modal`（卦详情 `<dialog>`）、`help`（使用说明 `<dialog>`）/ `apps/yi/js/modules/`
 - 样式（按关注点拆分，均为无构建的原生 CSS）：`apps/yi/css/tokens.css`（设计令牌/深色）→ `base.css`（排版、顶栏、底部导航）→ `components.css`（按钮/输入/分段/提示/对话框）→ `gua.css`（卦画）→ `taiji.css`（太极：主题切换、启动画面、载入态、成卦台中轴）→ `cast.css`（起卦、解读、经传与爻位标记）→ `library.css`（卦典、八卦与十翼）→ `history.css`（占记、减少动效、强制色、打印）
 - 数据（均为 JSON + 同内容 `.js` 回退）：`data/hexagrams.json`（卦名、卦画、白话）、`data/bagua.json`（八卦属性）、`data/zhouyi.json`（经传原文，v2.1.0 新增，可选）
-- 测试与 CI：`apps/yi/tests/validate-project.mjs` 为统一入口（许可证、文档、HTML 契约、数据回退一致、JS 语法，并依次运行 `yijing-core.test.mjs` 与 6 份契约测试）；`.github/workflows/pages.yml` 对所有 PR 与 main 运行验证，仅 main 构建并部署 Pages，Actions 固定到 commit SHA
+- 测试与 CI：`apps/yi/tests/validate-project.mjs` 为统一入口（许可证、文档、HTML 契约、数据回退一致、JS 语法，并依次运行 `yijing-core.test.mjs`、6 份契约测试与 CLI/API/MCP 三套测试）；`.github/workflows/pages.yml` 对所有 PR 与 main 运行验证，仅 main 构建并部署 Pages，Actions 固定到 commit SHA
 - 仓库卫生：`.gitattributes` 规定文本 LF；`.githooks/commit-msg` 要求提交信息含中文（`git config core.hooksPath .githooks` 启用），`.gitmessage` 为提交模板；`LICENSE` 为 MIT
 
 - 入口与加载顺序：`apps/yi/index.html:364-374` 按 `defer` 顺序加载 `core/yijing-core.js` → `app.js` → `services` → 各 `modules`；模块注册顺序即初始化顺序，见 `apps/yi/js/app.js:703`（`data/*.js` 仍由数据服务按需回退加载）
@@ -73,6 +74,8 @@
 
 ## 最近14个版本变更日志
 
+- v2.3.0（feature）：CLI/MCP 收敛为起卦记事、经文解析两步；可显式本机保存并按 ID 重读，完整返回错综互，AI 解读由调用方基于事件与资料生成
+- v2.2.0（feature）：新增离线 CLI 与 stdio MCP，复用易理核心和数据服务；提供八项只读工具、严格参数校验、本机配置生成及全组合/协议测试，浏览器接口与占记边界保持不变
 - v2.1.2（bugfix）：主题切换去掉强制同步样式重算（地址栏色改取常量），切换两帧内暂停全站颜色过渡；4 倍降速下长任务总时长约减 56%，并以契约固定地址栏色与 `--paper` 一致
 - v2.1.1（bugfix/merge）：合并 main 的 v1.2.0–v1.7.5 修复并移植到 v2 结构：数据失败关闭校验与原子提交、占记 v1 编解码与 canonical 水合、持久化文本只经 textContent、存储迁移容错、重置/载入占记取消进行中的投掷；契约测试改写为 v2 并纳入统一验证入口
 - v2.1.0（feature）：补入经传原文（卦辞、爻辞、彖、大象、小象、文言、用九用六，及系辞上下、说卦、序卦、杂卦）；恢复并升级太极动效（主题切换半周旋转 + 墨晕揭示、启动画面、载入态、成卦台中轴）；外显爻位（当位/失位、居中、相应）
@@ -85,8 +88,6 @@
 - v1.7.0（docs/chore）：统一 `AGENTS.md/ANCHOR.md` 大小写与文档引用；明确 LF 策略；加入中文提交 hook/template 和 repository hygiene 契约
 - v1.6.1（ci/bugfix）：build job 增加 `pages: read` 以兼容 private/internal 仓库读取 Pages 配置，同时保持部署写权限隔离
 - v1.6.0（ci）：所有 PR/main 统一运行项目契约验证；Pages build/deploy 只消费通过验证的 main 快照；默认只读、部署最小权限并固定 Actions SHA
-- v1.5.5（data/bugfix）：校正屯、贲、升的上下卦与空间意象，并以六爻编码推导契约全量扫描 64 卦
-- v1.5.4（bugfix）：localStorage 读取异常时继续尝试 legacy sessionStorage；八卦 schema 要求所有用户可见说明字段为非空字符串
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -102,6 +103,40 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.3.0
+
+- 变更版本：v2.3.0（feature），继续 PR #29 / Refs #28。
+- 目标：将零散工具收敛成“起卦＋事件记录”和“经文＋基础解析（错综互）”，再由调用方 AI 解读。
+- 变更文件与摘要：
+  - `tools/yi/api.mjs`：yi_cast 返回 v1 事件占记、原始六爻和下一步；显式 save 写固定用户目录，失败保留原卦；yi_reading 按六爻/UUID 取经文、白话、爻位及完整本卦错综互，按 ID 时同时返回事件。
+  - `tools/yi/cli.mjs` / `mcp.mjs`：日常帮助与 MCP 发现收敛两个入口；旧 CLI 和 MCP 显式名称保留，cast 返回结构改为两阶段。文本输出呈现事件背景与中文爻位，不伪造 AI 解读。
+  - `tools/yi/tests/*.test.mjs`：覆盖默认无写入、显式保存、跨实例重读、并发、损坏/非法 ID、失败保留原卦、完整自反关系及协议发现；原 4096 组合和浏览器契约保留。
+  - `tools/yi/README.md` / `apps/yi/README.md`、版本元数据和归档：记录新流程、迁移、命令与本机明文存储边界。
+- 验证：Windows / Node 24.22.2，`node --test tools/yi/tests/*.test.mjs` 83/83（API 54、CLI 8、MCP 21）；`node apps/yi/tests/validate-project.mjs` 全部通过（原核心 13 项＋6 份契约）；`git diff --check` 通过。沙箱目录联接 EPERM 后，在获准正常终端原命令重跑通过，没有跳过测试。独立审查的文本重读背景缺失、爻位 JSON 展示均修复并加回归。未单测 Node 22、客户端当前会话热重载或浏览器完整手工流程。
+- 默认与风险：无网络或模型调用；默认不保存事件。save:true 会将问题/背景/六爻明文写入 `.yi/records/<UUID>.json`，Windows ACL 由用户目录继承，不声称加密或跨用户隔离。不读浏览器占记，不自动同步。保存失败不可重起；客户端应检查 storage.status。MCP 宿主可以看到传入事件，即使本工具离线也不代表宿主离线。
+- 兼容性：旧 cast 返回的完整经文改由 reading 返回，版本提升至 2.3.0；旧低层查询直接调用保留但不在工具发现中展示。当前 PR 未发布、不合并、不部署。
+
+## 审计记录：v2.2.0
+
+- 变更版本：v2.2.0（feature），Refs #28
+- 改动概述：将原本只有浏览器入口的起卦/查卦能力开放给本机命令行与 Agent；共用原算法、数据校验、爻辞归一化和排序搜索，不复制数据或卦理。
+- 变更文件与补丁摘要：
+  - `apps/yi/js/core/yijing-core.js`：保留浏览器 YiCore，新增 CommonJS 导出；`hexagram-data-service-module.js` 提取隔离工厂，允许 Node 注入本地 JSON 读取器，浏览器维持原词法接口。
+  - `tools/yi/api.mjs`：八项共享操作、深冻结 schema、严格 JSON 参数校验、按安全随机源三钱起卦、六爻解析与应读经文；响应克隆，避免调用方污染服务快照。
+  - `tools/yi/cli.mjs` / `mcp.mjs`：JSON/便读命令行与 stdio MCP；1 MiB 字节帧上限、UTF-8 严格解码、背压、握手与错误隔离；明确支持 2025-11-25 / 2025-06-18。
+  - `tools/yi/tests/*.test.mjs`：全部 4096 种六爻（64×64 本之卦）、64×3 关系、数据损坏/可选降级、无网络/无写入、浏览器词法全局、CLI 子进程及 MCP 协议边界。
+  - `apps/yi/tests/validate-project.mjs`：语法扫描覆盖本机接口，统一入口纳入三套新测试；`app.js` 版本 2.2.0；更新 README、锚点与归档日志。
+- 验证步骤与结果：
+  - `node --test tools/yi/tests/*.test.mjs`：75/75 通过（API 49、CLI 6、MCP 20）；`node apps/yi/tests/validate-project.mjs`：通过（原核心 13 项、6 份浏览器/仓库契约及全部新增测试）；`git diff --check`：通过。
+  - 测试环境 Node 24.22.2 / Windows；未单独执行 Node 22。浏览器实际 UI 未改动；已通过原浏览器契约及 VM 词法加载回归，不冒充完整手工浏览器验收。
+  - 本机 `codex mcp add yi -- <Node绝对路径> <mcp.mjs绝对路径>` 成功，`codex mcp get yi --json` 读回 enabled=true；真实子进程完成握手与全部八工具调用。当前已打开 Agent 会话是否重载，仍须以客户端实际工具发现为准。
+- 评审修正（PR #29 P2）：真实符号链接/Windows 目录联接启动时 `argv[1]` 与模块 URL 不同，原入口判定会静默退出。CLI/MCP 均改为 `realpathSync` 归一化，并各补真实联接子进程回归；修复前0条响应，修复后正常 CLI 输出与 MCP 握手/工具调用。
+- 默认值与安全边界：
+  - 无第三方运行依赖、API key、网络或监听端口；仅固定仓库静态 JSON，不读取/写入浏览器 localStorage，不保存问题、占记或产生现实决策。
+  - 必需卦象/八卦损坏失败关闭，可选经传缺失在 stderr 告警并退回白话；CLI 成功0/输入错误2/内部错误1，stdout与stderr分离。
+  - 所有工具只读；随机起卦非幂等。六爻 values 自下而上，binary 自上而下。MCP 不声明 HTTP、旧版 batch、资源、提示词或任务能力。
+- 风险与后续事项：项目或 Node 移动后需重新生成客户端绝对路径配置；未做其他 Agent 客户端的端到端 UI 验收。回滚本分支并从本机客户端移除 yi 配置即可撤回接口，不影响浏览器占记。
 
 ## 审计记录：v2.1.2
 

@@ -141,7 +141,7 @@ function validateDataFallbacks() {
 }
 
 function validateJavaScriptSyntax() {
-  const files = execFileSync('git', ['ls-files', 'apps/yi/*.js', 'apps/yi/js/*.js', 'apps/yi/js/**/*.js'], {
+  const files = execFileSync('git', ['ls-files', 'apps/yi/*.js', 'apps/yi/js/*.js', 'apps/yi/js/**/*.js', 'tools/yi/*.mjs', 'tools/yi/tests/*.mjs'], {
     cwd: repoRoot,
     encoding: 'utf8'
   }).split(/\r?\n/).filter(Boolean).filter(file => existsSync(join(repoRoot, file)));
@@ -164,7 +164,10 @@ function validateTestSuites() {
     'apps/yi/tests/hexagram-content-contract.mjs',
     'apps/yi/tests/history-security-contract.mjs',
     'apps/yi/tests/ci-workflow-contract.mjs',
-    'apps/yi/tests/repository-hygiene-contract.mjs'
+    'apps/yi/tests/repository-hygiene-contract.mjs',
+    'tools/yi/tests/api.test.mjs',
+    'tools/yi/tests/cli.test.mjs',
+    'tools/yi/tests/mcp.test.mjs'
   ];
 
   for (const suite of suites) {
@@ -215,4 +218,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Project validation passed: MIT license, docs, HTML contracts, 64/8/64 data snapshots with fallback parity, JavaScript syntax, core tests and contracts.');
+console.log('Project validation passed: MIT license, docs, HTML contracts, 64/8/64 data snapshots with fallback parity, JavaScript syntax, core tests, browser contracts and CLI/MCP tests.');
