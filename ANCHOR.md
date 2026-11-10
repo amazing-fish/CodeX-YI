@@ -16,7 +16,7 @@
   - 卦典 `library` / 六十四卦方图（行=上卦、列=下卦）与列表、排序搜索；取代旧“卦象分析”“卦象查询” / `apps/yi/js/modules/library-module.js`
   - 八卦 · 易传 `trigrams` / 八卦卡片（先天次序）、四象、断卦规则、错综互、爻位说明、十翼通论（系辞上下、说卦、序卦、杂卦全文）/ `apps/yi/js/modules/knowledge-module.js`
   - 占记 `history` / 本机记录的检索、按时段筛选、重读、删除（可撤销）、导入/导出 / `apps/yi/js/modules/history-module.js`
-- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，两者附原生 PNG 卦画与 rendering 资料（image:none 可关图）；`tools/yi/render.mjs` 只组织本卦，`web-render.mjs` 复用网页共享组件和原 CSS，由本机 Chromium 生成 PNG；临时隔离配置、内存图片、不嵌入事件，AI 解读由调用方生成；`methodology.mjs` 随 reading 返回证据分层、具名短引/异说/覆盖/来源及本之卦承乘比，不新增工具。Node 22+、零 npm 依赖，PNG 另需本机 Chromium；接入文档 `tools/yi/README.md`。
+- 本机接口：`tools/yi/cli.mjs`（默认 JSON / 可选文本）、`tools/yi/mcp.mjs`（stdio MCP）、`tools/yi/api.mjs`（两步工作流与高级查询共享参数校验）；直接复用 `YiCore` 与可注入读取器的数据服务工厂，默认不写入；显式 save 才将事件记录写入 OS 用户主目录 `.yi/records`，不访问浏览器占记。MCP 默认只发现 `yi_cast` / `yi_reading`，两者附原生 PNG 卦画与 rendering 资料（image:none 可关图）；`tools/yi/render.mjs` 只组织本卦，`web-render.mjs` 复用网页共享组件和原 CSS，由本机 Chromium 生成 PNG；临时隔离配置、内存图片、不嵌入事件，AI 解读由调用方生成；`methodology.mjs` 随 reading 返回证据分层、按本次主读生成的具名作品检索任务/出处规则/不可检索降级及本之卦承乘比，不新增工具。Node 22+、零 npm 依赖，PNG 另需本机 Chromium；接入文档 `tools/yi/README.md`。
 - 支撑模块：
   - 易理核心 `YiCore`（纯函数，无 DOM，可在 Node 测试）/ `apps/yi/js/core/yijing-core.js`
   - 数据服务 `hexagramData` / 加载、失败关闭校验、索引、全名/卦画/关系卦补齐、排序搜索 / `apps/yi/js/services/hexagram-data-service-module.js`
@@ -74,6 +74,8 @@
 
 ## 最近14个版本变更日志
 
+- v2.5.1（refactor）：具体注释改由调用 AI 当次检索，方法 v2 逐主读给查询线索、证据/隐私/不可检索规则，删除固定短引库；保留两工具、计算与真实单本卦图片
+
 - v2.5.0（feature）：既有 reading 内置解读方法、具名咸上六四家短引与覆盖缺口、三爻简化说明、爻位异说及本之卦承乘比；保留两工具和单本卦图片
 
 - v2.4.1（bugfix）：MCP 改用网页同一卦画/爻位组件和 Chromium 真实渲染，只画本卦及变爻/居中/相应；文本保留之卦与错综互
@@ -90,7 +92,6 @@
 - v1.7.4（test/chore）：commit-msg hook 忽略注释化模板提示，拒绝“英文内容 + 中文模板”的假阳性
 - v1.7.3（test/chore）：归一化 3 个与 LF 属性冲突的核心源文件，并增加索引 EOL 回归契约
 - v1.7.2（test/chore）：commit-msg hook 改用 Node Unicode Han 检测，并通过真实 shell 执行测试验证中文放行、纯英文拒绝
-- v1.7.1（test/docs）：hygiene 扫描改用未引号化 NUL 路径，覆盖非 ASCII 文件名，并修正 `.trae/documents` 中被旧扫描漏掉的引用与 EOF
 
 > 说明：超出最近14个版本的记录已转入归档文件 `CHANGELOG-ARCHIVE.md`；各版本审计记录保留在本文件下方。
 
@@ -106,6 +107,15 @@
 - 阅读本锚点 → 更新 `AGENTS.md` → 新增 `ANCHOR.md` → 在“最近14个版本变更日志”登记 `v1.0.0`
 - 输出：两文档已创建并包含提示词、约定与日志模板
 - 结论：文档协作路径可用，后续改动可沿用审计模板记录
+
+## 审计记录：v2.5.1
+
+- 变更版本：v2.5.1（refactor），继续本地 feature/mcp-methodology 的 ea87e21。用户要求具体注释调用时由 AI 自己查询，并继续推送正式 PR。
+- 变更文件与摘要：`tools/yi/methodology.mjs` 删除固定咸上六注释库，方法升 v2；每个 `guide.focus` 生成目标、卦/爻/用九用六定位、五家作品查询词及核验契约。区分方法来源历史核验与当前注释未检索；明确访问失败、只有摘要、无检索工具时的证据缺口，查询不带事件信息，不将网页指令视为授权。
+- 接口、文档与测试：`api.mjs` / `mcp.mjs` 的描述与指引同步；CLI 文本使用同一方法函数；版本、双 README、当前锚点及归档同步。四套接口测试补 4096 检索目标、64 卦、主辅/贞悔、之卦、用九用六、经典缺失、隐私和双协议契约。
+- 验证：Windows / Node 24.22.2，完整 `node apps/yi/tests/validate-project.mjs` 通过（核心 13 项、6 份契约、接口 102 项，含真实 Chromium PNG 和双协议 stdio）；`git diff --check` 通过。首次目录联接 EPERM 经工具授权在普通本机权限重跑原用例通过，未弱化测试。独立只读审查发现 changed 检索目标的上下文误写“本卦”，已改为实际目标卦名并加入 4096 组合断言。
+- 范围与风险：不改变六爻计算、主读规则或真实 PNG 渲染实现；方法 v1 的 entries/coverage/focusCoverage 改为 v2 检索契约，程序消费者需迁移。MCP 仍离线，不声称已检索或保证宿主执行；本轮未做真实模型联网检索验收。
+- 远端边界：此前 `git fetch origin main` 被网络策略拒绝（github.com:443），本轮尚无策略改变依据，未重试或换路。尚未推送、开 PR、验远端 CI；不得把本地提交当已发布。后续需允许原路网络后同步远端 main、复核差异，再推正式 PR，不自动合并或部署。
 
 ## 审计记录：v2.5.0
 

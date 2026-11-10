@@ -430,8 +430,10 @@ test('经传缺失或损坏可选降级，白话查询分析仍完整且经典�
         const reading = await degraded.invoke('yi_reading', { values: [8, 8, 7, 7, 7, 6] });
         assert.equal(reading.evidence.classicsAvailable, false);
         assert.equal(reading.methodology.layers.find(layer => layer.id === 'classic').available, false);
-        assert.equal(reading.methodology.commentaries.entries.length, 4);
-        assert.equal(reading.methodology.commentaries.coverage.fullCorpus, false);
+        assert.equal(reading.methodology.commentaries.status, 'not-retrieved');
+        assert.equal(reading.methodology.commentaries.targets[0].section, '上六');
+        assert.equal(reading.methodology.commentaries.targets[0].classicText, null);
+        assert.equal(reading.methodology.commentaries.targets[0].classicTextStatus, 'unavailable');
         const text = renderText(await degraded.invoke('yi_reading', { values: [7, 7, 7, 7, 7, 7] }));
         assert.match(text, /经传原文不可用/);
         assert.match(text, /乾为天 白话\/旧数据回退：自强不息/);

@@ -19,7 +19,7 @@ const ready = version => [initialize(version), notification('notifications/initi
 const encode = messages => `${messages.map(message => JSON.stringify(message)).join('\n')}\n`;
 const stubApi = { async invoke(name, args) { return { name, args }; } };
 
-test('真实双协议 MCP 仍只发现两工具并随 reading 交付方法、具名注解和缺口', async () => {
+test('真实双协议 MCP 仍只发现两工具并随 reading 交付方法、当次检索任务和证据边界', async () => {
     for (const version of SUPPORTED_PROTOCOL_VERSIONS) {
         const output = await subprocess(mcpPath, { raw: encode([...ready(version), request('list', 'tools/list'),
             request('xian', 'tools/call', { name: 'yi_reading', arguments: { values: [8, 8, 7, 7, 7, 6], image: 'none' } }),
@@ -33,13 +33,16 @@ test('真实双协议 MCP 仍只发现两工具并随 reading 交付方法、具
         for (const message of messages.slice(2)) {
             assert.equal(message.result.isError, false);
             assert.deepEqual(JSON.parse(message.result.content[0].text), message.result.structuredContent);
-            assert.equal(message.result.structuredContent.methodology.version, 1);
+            assert.equal(message.result.structuredContent.methodology.version, 2);
         }
-        assert.equal(messages[2].result.structuredContent.methodology.commentaries.entries.length, 4);
+        assert.equal(messages[2].result.structuredContent.methodology.commentaries.status, 'not-retrieved');
+        assert.match(messages[0].result.instructions, /当次查询/);
+        assert.match(messages[0].result.instructions, /宿主无检索能力/);
+        assert.equal(messages[2].result.structuredContent.methodology.commentaries.targets[0].queries[0].query, '周易注 王弼 咸 上六');
         const missing = messages[3].result.structuredContent.methodology;
         assert.equal(missing.selection.threeChanges.applied, true);
-        assert.equal(missing.commentaries.entries.length, 0);
-        assert.ok(missing.commentaries.focusCoverage.every(item => item.status === 'not-included'));
+        assert.equal(missing.commentaries.targets.length, 2);
+        assert.ok(missing.commentaries.targets.every(item => item.status === 'not-retrieved'));
     }
 });
 

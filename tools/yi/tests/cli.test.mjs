@@ -19,22 +19,22 @@ function json(...args) {
     return JSON.parse(result.stdout);
 }
 
-test('CLI 文本与 JSON reading 提供相同方法、具名注解与未收录提示', () => {
+test('CLI 文本与 JSON reading 提供相同方法、当次注释检索与不可检索提示', () => {
     const result = json('reading', '8,8,7,7,7,6');
-    assert.equal(result.methodology.commentaries.entries.length, 4);
+    assert.equal(result.methodology.commentaries.status, 'not-retrieved');
     const rendered = run('reading', '8,8,7,7,7,6', '--text');
     assert.equal(rendered.status, 0, rendered.stderr);
-    for (const word of ['方法论', '王弼', '孔颖达', '朱熹', '项安世', '未收录', '阴承阳', '阴乘阳', '不能当作三次独立验证', '出处：https://']) assert.ok(rendered.stdout.includes(word), word);
+    for (const word of ['方法论', '王弼', '孔颖达', '朱熹', '项安世', '未检索', '阴承阳', '阴乘阳', '不能当作三次独立验证', '本次未能核验具体注释', '方法来源（非当次注释检索结果）', '不得把用户所问']) assert.ok(rendered.stdout.includes(word), word);
     const three = run('reading', '9,9,9,7,7,7', '--text');
     assert.equal(three.status, 0, three.stderr);
     assert.match(three.stdout, /三爻变简化（本次适用）/);
-    assert.match(three.stdout, /主读注解覆盖：.*未收录/);
+    assert.match(three.stdout, /待检索主读.*（未检索）/);
 });
 
 test('帮助、版本与 cwd 无关的 JSON 输出', () => {
     assert.match(run('--help').stdout, /初爻→上爻/);
     assert.match(run('help').stdout, /stdio MCP/);
-    assert.equal(run('--version').stdout.trim(), '2.5.0');
+    assert.equal(run('--version').stdout.trim(), '2.5.1');
     assert.equal(json('info').hexagrams, 64);
     assert.equal(json('info', '--json').lineOrder, 'bottom-to-top');
     assert.equal(json('list', '--limit', '2', '--offset', '62').items[1].id, 64);
