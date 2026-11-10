@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { createContext, runInContext } from 'node:vm';
 import { createYiApi, OPERATIONS, VERSION, YiInputError } from '../api.mjs';
+import { renderText } from '../cli.mjs';
 
 const require = createRequire(import.meta.url);
 const YiCore = require('../../../apps/yi/js/core/yijing-core.js');
@@ -426,6 +427,18 @@ test('经传缺失或损坏可选降级，白话查询分析仍完整且经典�
             assert.equal(result.primary.judgment, '');
             assert.ok(result.primary.lines.every(line => typeof line.text === 'string' && line.text.length > 0));
         }
+        const reading = await degraded.invoke('yi_reading', { values: [8, 8, 7, 7, 7, 6] });
+        assert.equal(reading.evidence.classicsAvailable, false);
+        assert.equal(reading.methodology.layers.find(layer => layer.id === 'classic').available, false);
+        assert.equal(reading.methodology.commentaries.status, 'not-retrieved');
+        assert.equal(reading.methodology.commentaries.targets[0].section, '上六');
+        assert.equal(reading.methodology.commentaries.targets[0].classicText, null);
+        assert.equal(reading.methodology.commentaries.targets[0].classicTextStatus, 'unavailable');
+        const text = renderText(await degraded.invoke('yi_reading', { values: [7, 7, 7, 7, 7, 7] }));
+        assert.match(text, /经传原文不可用/);
+        assert.match(text, /乾为天 白话\/旧数据回退：自强不息/);
+        assert.doesNotMatch(text, /乾为天 卦辞：自强不息/);
+        assert.doesNotMatch(text, /以上为经文与确定性基础解析/);
     });
 });
 

@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { createYiApi, VERSION, YiInputError } from './api.mjs';
+import { methodologyText } from './methodology.mjs';
 
 const HELP = `易之 YI ${VERSION} · 离线 CLI / MCP（Node >=22）
 用法：node tools/yi/cli.mjs <命令> [参数]
@@ -109,7 +110,7 @@ function agentConfig(client = 'codex') {
     throw new YiInputError('--client 只支持 codex 或 claude');
 }
 
-function renderText(result) {
+export function renderText(result) {
     if (result.record && result.storage) {
         const { record, storage } = result;
         return [`事件：${record.question || '未填写'}`, `背景：${record.notes || '未填写'}`, `占记 ID：${record.id}`,
@@ -120,13 +121,21 @@ function renderText(result) {
     }
     if (result.primary) {
         const { primary, changed, guide } = result;
+        const classicsAvailable = result.evidence?.classicsAvailable ?? Boolean(primary.classic);
         const parts = [result.question ? `所问：${result.question}` : '', `${primary.id} ${primary.fullName} → ${changed.id} ${changed.fullName}`, `六爻（初→上）：${result.values.join(',')}`, `变爻：${result.changingPositions.join('、') || '无'}`, `${guide.rule.name}：${guide.rule.text}`];
-        for (const reading of guide.readings) parts.push(`${reading.hexagram.fullName} ${reading.title || '卦辞'}${reading.main ? '（主）' : ''}：${reading.text}${reading.xiang ? `\n象曰：${reading.xiang}` : ''}`);
+        if (!classicsAvailable) parts.push('经传原文不可用：下面的白话/旧数据回退不是已核验经文，不能据此伪造原文引证。');
+        for (const reading of guide.readings) {
+            const label = classicsAvailable ? reading.title || '卦辞'
+                : reading.kind === 'special' ? `${reading.title || reading.label}（核心内置经句，完整经传不可用）`
+                    : `${reading.title ? `${reading.title} · ` : ''}白话/旧数据回退`;
+            parts.push(`${reading.hexagram.fullName} ${label}${reading.main ? '（主）' : ''}：${reading.text}${reading.xiang ? `\n象曰：${reading.xiang}` : ''}`);
+        }
         if (result.related) {
             if (result.record?.notes) parts.push(`事件背景：${result.record.notes}`);
             parts.push(`爻位：${result.positions.proper} 爻当位、${result.positions.improper} 爻失位，${result.positions.pairs} 组相应${result.positions.note ? `；${result.positions.note}` : ''}`, `白话：${primary.explanation || primary.overview || ''}`);
             for (const [key, hexagram] of Object.entries(result.related)) parts.push(`${{ opposite: '错卦', inverse: '综卦', mutual: '互卦' }[key]}：${hexagram.fullName}；${hexagram.judgment || hexagram.explanation}`);
-            parts.push('以上为经文与确定性基础解析，AI 解读由调用方结合事件生成。');
+            parts.push(`以上为${classicsAvailable ? '经文' : '白话/旧数据回退'}与确定性基础解析，AI 解读由调用方结合事件生成。`);
+            if (result.methodology) parts.push(methodologyText(result.methodology));
         }
         return parts.filter(Boolean).join('\n');
     }

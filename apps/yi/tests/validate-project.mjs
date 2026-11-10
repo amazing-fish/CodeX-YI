@@ -166,6 +166,7 @@ function validateTestSuites() {
     'apps/yi/tests/ci-workflow-contract.mjs',
     'apps/yi/tests/repository-hygiene-contract.mjs',
     'tools/yi/tests/api.test.mjs',
+    'tools/yi/tests/methodology.test.mjs',
     'tools/yi/tests/cli.test.mjs',
     'tools/yi/tests/mcp.test.mjs',
     'tools/yi/tests/render.test.mjs'
